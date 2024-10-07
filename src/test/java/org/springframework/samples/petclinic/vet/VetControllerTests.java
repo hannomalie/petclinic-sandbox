@@ -17,36 +17,28 @@
 package org.springframework.samples.petclinic.vet;
 
 import org.assertj.core.util.Lists;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledInNativeImage;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.aot.DisabledInAotMode;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.samples.petclinic.BaseSpringBootTest;
+import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
  * Test class for the {@link VetController}
  */
 
-@WebMvcTest(VetController.class)
-@DisabledInNativeImage
-@DisabledInAotMode
-class VetControllerTests {
-
-	@Autowired
-	private MockMvc mockMvc;
+class VetControllerTests extends BaseSpringBootTest {
 
 	@MockBean
 	private VetRepository vets;
@@ -81,20 +73,24 @@ class VetControllerTests {
 
 	@Test
 	void testShowVetListHtml() throws Exception {
+		var httpResponse = get("http://localhost:" + port + "/vets?page=1", "text/html");
 
-		mockMvc.perform(MockMvcRequestBuilders.get("/vets.html?page=1"))
-			.andExpect(status().isOk())
-			.andExpect(model().attributeExists("listVets"))
-			.andExpect(view().name("vets/vetList"));
-
+		assertThat(httpResponse.body().toString()).contains("<title>PetClinic :: a Spring Framework demonstration</title>");
 	}
 
 	@Test
 	void testShowResourcesVetList() throws Exception {
-		ResultActions actions = mockMvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
-			.andExpect(status().isOk());
-		actions.andExpect(content().contentType(MediaType.APPLICATION_JSON))
-			.andExpect(jsonPath("$.vetList[0].id").value(1));
-	}
+		var httpResponse = get("http://localhost:" + port + "/vets", "application/json");
+		var json = new ObjectMapper().readValue(httpResponse.body().toString(), HashMap.class);
 
+		var vetList = (List<HashMap<String, Object>>) json.get("vetList");
+		var expectedVetListEntry = new HashMap<String, Object>();
+		expectedVetListEntry.put("id", 1);
+		expectedVetListEntry.put("firstName", "James");
+		expectedVetListEntry.put("lastName", "Carter");
+		expectedVetListEntry.put("specialties", new ArrayList<String>());
+		expectedVetListEntry.put("nrOfSpecialties", 0);
+		expectedVetListEntry.put("new", false);
+		Assertions.assertEquals(expectedVetListEntry, vetList.get(0));
+	}
 }

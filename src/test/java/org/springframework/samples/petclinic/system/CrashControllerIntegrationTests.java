@@ -16,29 +16,21 @@
 
 package org.springframework.samples.petclinic.system;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
-
-import java.util.List;
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.RequestEntity;
-import org.springframework.http.ResponseEntity;
+import org.springframework.samples.petclinic.BaseSpringBootTest;
+import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.HashMap;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
 
 /**
  * Integration Test for {@link CrashController}.
@@ -48,7 +40,7 @@ import org.springframework.http.ResponseEntity;
 // NOT Waiting https://github.com/spring-projects/spring-boot/issues/5574
 @SpringBootTest(webEnvironment = RANDOM_PORT,
 		properties = { "server.error.include-message=ALWAYS", "management.endpoints.enabled-by-default=false" })
-class CrashControllerIntegrationTests {
+class CrashControllerIntegrationTests extends BaseSpringBootTest {
 
 	@SpringBootApplication(exclude = { DataSourceAutoConfiguration.class,
 			DataSourceTransactionManagerAutoConfiguration.class, HibernateJpaAutoConfiguration.class })
@@ -56,44 +48,32 @@ class CrashControllerIntegrationTests {
 
 	}
 
-	@Value(value = "${local.server.port}")
-	private int port;
-
-	@Autowired
-	private TestRestTemplate rest;
-
 	@Test
-	void testTriggerExceptionJson() {
-		ResponseEntity<Map<String, Object>> resp = rest.exchange(
-				RequestEntity.get("http://localhost:" + port + "/oups").build(),
-				new ParameterizedTypeReference<Map<String, Object>>() {
-				});
-		assertThat(resp).isNotNull();
-		assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-		assertThat(resp.getBody()).containsKey("timestamp");
-		assertThat(resp.getBody()).containsKey("status");
-		assertThat(resp.getBody()).containsKey("error");
-		assertThat(resp.getBody()).containsEntry("message",
-				"Expected: controller used to showcase what happens when an exception is thrown");
-		assertThat(resp.getBody()).containsEntry("path", "/oups");
+	void testTriggerExceptionJson() throws Exception {
+		var httpResponse = get("http://localhost:" + port + "/oups");
+
+		var json = new ObjectMapper().readValue(httpResponse.body().toString(), HashMap.class);
+
+		assertEquals(500, httpResponse.statusCode());
+		assertNotNull(json.get("timestamp"));
+		assertNotNull(json.get("status"));
+		assertNotNull(json.get("error"));
+		assertEquals("Expected: controller used to showcase what happens when an exception is thrown", json.get("message"));
+		assertEquals("/oups", json.get("path"));
 	}
 
 	@Test
-	void testTriggerExceptionHtml() {
-		HttpHeaders headers = new HttpHeaders();
-		headers.setAccept(List.of(MediaType.TEXT_HTML));
-		ResponseEntity<String> resp = rest.exchange("http://localhost:" + port + "/oups", HttpMethod.GET,
-				new HttpEntity<>(headers), String.class);
-		assertThat(resp).isNotNull();
-		assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-		assertThat(resp.getBody()).isNotNull();
-		// html:
-		assertThat(resp.getBody()).containsSubsequence("<body>", "<h2>", "Something happened...", "</h2>", "<p>",
+	void testTriggerExceptionHtml() throws Exception {
+		var httpResponse = get("http://localhost:" + port + "/oups", "text/html");
+
+
+		assertEquals(500, httpResponse.statusCode());
+		assertThat(httpResponse.body().toString()).containsSubsequence("<body>", "<h2>", "Something happened...", "</h2>", "<p>",
 				"Expected:", "controller", "used", "to", "showcase", "what", "happens", "when", "an", "exception", "is",
 				"thrown", "</p>", "</body>");
-		// Not the whitelabel error page:
-		assertThat(resp.getBody()).doesNotContain("Whitelabel Error Page",
+		assertThat(httpResponse.body().toString()).doesNotContain("Whitelabel Error Page",
 				"This application has no explicit mapping for");
+
 	}
 
 }
