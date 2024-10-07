@@ -17,11 +17,21 @@
 package org.springframework.samples.petclinic.system;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +49,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
+import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Integration Test for {@link CrashController}.
@@ -64,36 +75,56 @@ class CrashControllerIntegrationTests {
 
 	@Test
 	void testTriggerExceptionJson() {
-		ResponseEntity<Map<String, Object>> resp = rest.exchange(
-				RequestEntity.get("http://localhost:" + port + "/oups").build(),
-				new ParameterizedTypeReference<Map<String, Object>>() {
-				});
-		assertThat(resp).isNotNull();
-		assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-		assertThat(resp.getBody()).containsKey("timestamp");
-		assertThat(resp.getBody()).containsKey("status");
-		assertThat(resp.getBody()).containsKey("error");
-		assertThat(resp.getBody()).containsEntry("message",
-				"Expected: controller used to showcase what happens when an exception is thrown");
-		assertThat(resp.getBody()).containsEntry("path", "/oups");
+		HttpClient client = HttpClient.newHttpClient();
+		HttpRequest request = HttpRequest.newBuilder()
+			.uri(URI.create("http://localhost:" + port + "/oups"))
+			.build();
+		AtomicReference<HttpResponse> httpResponse = new AtomicReference<>();
+		AtomicReference<Map<String, Object>> json = new AtomicReference<>();
+
+		client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+			.thenAccept((response) -> {
+				httpResponse.set(response);
+				ObjectMapper mapper = new ObjectMapper();
+				try {
+					json.set(mapper.readValue(response.body(), HashMap.class));
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+			})
+			.join();
+
+		assertEquals(500, httpResponse.get().statusCode());
+		assertNotNull(json.get().get("timestamp"));
+		assertNotNull(json.get().get("status"));
+		assertNotNull(json.get().get("error"));
+		assertEquals("Expected: controller used to showcase what happens when an exception is thrown", json.get().get("message"));
+		assertEquals("/oups", json.get().get("path"));
 	}
 
 	@Test
 	void testTriggerExceptionHtml() {
-		HttpHeaders headers = new HttpHeaders();
-		headers.setAccept(List.of(MediaType.TEXT_HTML));
-		ResponseEntity<String> resp = rest.exchange("http://localhost:" + port + "/oups", HttpMethod.GET,
-				new HttpEntity<>(headers), String.class);
-		assertThat(resp).isNotNull();
-		assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-		assertThat(resp.getBody()).isNotNull();
-		// html:
-		assertThat(resp.getBody()).containsSubsequence("<body>", "<h2>", "Something happened...", "</h2>", "<p>",
+
+		HttpClient client = HttpClient.newHttpClient();
+		HttpRequest request = HttpRequest.newBuilder()
+			.uri(URI.create("http://localhost:" + port + "/oups"))
+			.header("Accept", "text/html")
+			.build();
+		AtomicReference<HttpResponse> httpResponse = new AtomicReference<>();
+
+		client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+			.thenAccept((response) -> {
+				httpResponse.set(response);
+			})
+			.join();
+
+		assertEquals(500, httpResponse.get().statusCode());
+		assertThat(httpResponse.get().body().toString()).containsSubsequence("<body>", "<h2>", "Something happened...", "</h2>", "<p>",
 				"Expected:", "controller", "used", "to", "showcase", "what", "happens", "when", "an", "exception", "is",
 				"thrown", "</p>", "</body>");
-		// Not the whitelabel error page:
-		assertThat(resp.getBody()).doesNotContain("Whitelabel Error Page",
+		assertThat(httpResponse.get().body().toString()).doesNotContain("Whitelabel Error Page",
 				"This application has no explicit mapping for");
+
 	}
 
 }

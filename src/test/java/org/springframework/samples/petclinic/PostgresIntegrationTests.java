@@ -16,42 +16,40 @@
 
 package org.springframework.samples.petclinic;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
-
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledInNativeImage;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.boot.context.event.ApplicationPreparedEvent;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.context.ApplicationListener;
-import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.core.env.EnumerablePropertySource;
-import org.springframework.core.env.PropertySource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.samples.petclinic.vet.VetRepository;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.aot.DisabledInAotMode;
 import org.springframework.web.client.RestTemplate;
 import org.testcontainers.DockerClientFactory;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = { "spring.docker.compose.skip.in-tests=false", //
-		"spring.docker.compose.profiles.active=postgres" })
-@ActiveProfiles("postgres")
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
+@Testcontainers(disabledWithoutDocker = true)
 @DisabledInNativeImage
+@DisabledInAotMode
 public class PostgresIntegrationTests {
+
+	@ServiceConnection
+	@Container
+	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16");
 
 	@LocalServerPort
 	int port;
@@ -67,16 +65,6 @@ public class PostgresIntegrationTests {
 		assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker not available");
 	}
 
-	public static void main(String[] args) {
-		new SpringApplicationBuilder(PetClinicApplication.class) //
-			.profiles("postgres") //
-			.properties( //
-					"spring.docker.compose.profiles.active=postgres" //
-			) //
-			.listeners(new PropertiesLogger()) //
-			.run(args);
-	}
-
 	@Test
 	void testFindAll() throws Exception {
 		vets.findAll();
@@ -90,51 +78,13 @@ public class PostgresIntegrationTests {
 		assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
 	}
 
-	static class PropertiesLogger implements ApplicationListener<ApplicationPreparedEvent> {
-
-		private static final Log log = LogFactory.getLog(PropertiesLogger.class);
-
-		private ConfigurableEnvironment environment;
-
-		private boolean isFirstRun = true;
-
-		@Override
-		public void onApplicationEvent(ApplicationPreparedEvent event) {
-			if (isFirstRun) {
-				environment = event.getApplicationContext().getEnvironment();
-				printProperties();
-			}
-			isFirstRun = false;
-		}
-
-		public void printProperties() {
-			for (EnumerablePropertySource<?> source : findPropertiesPropertySources()) {
-				log.info("PropertySource: " + source.getName());
-				String[] names = source.getPropertyNames();
-				Arrays.sort(names);
-				for (String name : names) {
-					String resolved = environment.getProperty(name);
-					String value = source.getProperty(name).toString();
-					if (resolved.equals(value)) {
-						log.info(name + "=" + resolved);
-					}
-					else {
-						log.info(name + "=" + value + " OVERRIDDEN to " + resolved);
-					}
-				}
-			}
-		}
-
-		private List<EnumerablePropertySource<?>> findPropertiesPropertySources() {
-			List<EnumerablePropertySource<?>> sources = new LinkedList<>();
-			for (PropertySource<?> source : environment.getPropertySources()) {
-				if (source instanceof EnumerablePropertySource enumerable) {
-					sources.add(enumerable);
-				}
-			}
-			return sources;
-		}
-
+	@DynamicPropertySource
+	static void registerPgProperties(DynamicPropertyRegistry registry) {
+		registry.add("spring.datasource.url",
+			() -> String.format("jdbc:postgresql://localhost:%d/petclinic", container.getFirstMappedPort()));
+		registry.add("spring.datasource.username", () -> "petclinic");
+		registry.add("spring.datasource.password", () -> "petclinic");
+		registry.add("spring.sql.init.mode", () -> "always");
+		registry.add("database", () -> "postgres");
 	}
-
 }

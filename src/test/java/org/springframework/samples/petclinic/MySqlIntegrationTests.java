@@ -31,6 +31,8 @@ import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.samples.petclinic.vet.VetRepository;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.aot.DisabledInAotMode;
 import org.springframework.web.client.RestTemplate;
 import org.testcontainers.containers.MySQLContainer;
@@ -38,7 +40,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("mysql")
 @Testcontainers(disabledWithoutDocker = true)
 @DisabledInNativeImage
 @DisabledInAotMode
@@ -68,6 +69,16 @@ class MySqlIntegrationTests {
 		RestTemplate template = builder.rootUri("http://localhost:" + port).build();
 		ResponseEntity<String> result = template.exchange(RequestEntity.get("/owners/1").build(), String.class);
 		assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+	}
+
+	@DynamicPropertySource
+	static void registerPgProperties(DynamicPropertyRegistry registry) {
+		registry.add("spring.datasource.url",
+			() -> String.format("jdbc:mysql://localhost:%d/petclinic", container.getFirstMappedPort()));
+		registry.add("spring.datasource.username", () -> "petclinic");
+		registry.add("spring.datasource.password", () -> "petclinic");
+		registry.add("spring.sql.init.mode", () -> "always");
+		registry.add("database", () -> "mysql");
 	}
 
 }

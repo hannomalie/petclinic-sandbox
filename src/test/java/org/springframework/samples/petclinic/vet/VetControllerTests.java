@@ -17,19 +17,30 @@
 package org.springframework.samples.petclinic.vet;
 
 import org.assertj.core.util.Lists;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledInNativeImage;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.aot.DisabledInAotMode;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -40,13 +51,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Test class for the {@link VetController}
  */
 
-@WebMvcTest(VetController.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisabledInNativeImage
 @DisabledInAotMode
 class VetControllerTests {
 
-	@Autowired
-	private MockMvc mockMvc;
+	@LocalServerPort
+	int port;
 
 	@MockBean
 	private VetRepository vets;
@@ -82,19 +93,51 @@ class VetControllerTests {
 	@Test
 	void testShowVetListHtml() throws Exception {
 
-		mockMvc.perform(MockMvcRequestBuilders.get("/vets.html?page=1"))
-			.andExpect(status().isOk())
-			.andExpect(model().attributeExists("listVets"))
-			.andExpect(view().name("vets/vetList"));
+		HttpClient client = HttpClient.newHttpClient();
+		HttpRequest request = HttpRequest.newBuilder()
+			.uri(URI.create("http://localhost:" + port + "/vets?page=1"))
+			.header("Accept", "text/html")
+			.build();
+		AtomicReference<String> html = new AtomicReference<>();
 
+		client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+			.thenAccept((response) -> {
+				html.set(response.body());
+			})
+			.join();
+
+		var containsTitle = html.get().contains("<title>PetClinic :: a Spring Framework demonstration</title>");
+		Assertions.assertTrue(containsTitle);
 	}
 
 	@Test
 	void testShowResourcesVetList() throws Exception {
-		ResultActions actions = mockMvc.perform(get("/vets").accept(MediaType.APPLICATION_JSON))
-			.andExpect(status().isOk());
-		actions.andExpect(content().contentType(MediaType.APPLICATION_JSON))
-			.andExpect(jsonPath("$.vetList[0].id").value(1));
-	}
+		HttpClient client = HttpClient.newHttpClient();
+		HttpRequest request = HttpRequest.newBuilder()
+			.uri(URI.create("http://localhost:" + port + "/vets"))
+			.header("Accept", "application/json")
+			.build();
+		AtomicReference<HashMap<String, HashMap<String, Object>>> json = new AtomicReference<>();
 
+		client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+			.thenAccept((response) -> {
+				ObjectMapper mapper = new ObjectMapper();
+				try {
+					json.set(mapper.readValue(response.body(), HashMap.class));
+				} catch (IOException e) {
+					throw new RuntimeException(e);
+				}
+			})
+			.join();
+
+		var vetList = (List<HashMap<String, Object>>) json.get().get("vetList");
+		var expectedVetListEntry = new HashMap<String, Object>();
+		expectedVetListEntry.put("id", 1);
+		expectedVetListEntry.put("firstName", "James");
+		expectedVetListEntry.put("lastName", "Carter");
+		expectedVetListEntry.put("specialties", new ArrayList<String>());
+		expectedVetListEntry.put("nrOfSpecialties", 0);
+		expectedVetListEntry.put("new", false);
+		Assertions.assertEquals(expectedVetListEntry, vetList.get(0));
+	}
 }
