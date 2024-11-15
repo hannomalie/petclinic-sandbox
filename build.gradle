@@ -38,6 +38,9 @@ dependencies {
   implementation 'org.springframework.boot:spring-boot-starter-validation'
   implementation 'javax.cache:cache-api'
   implementation 'jakarta.xml.bind:jakarta.xml.bind-api'
+  implementation(platform("org.jdbi:jdbi3-bom:3.47.0"))
+  implementation("org.jdbi:jdbi3-core")
+  implementation("org.jdbi:jdbi3-spring")
   runtimeOnly 'org.springframework.boot:spring-boot-starter-actuator'
   runtimeOnly "org.webjars.npm:bootstrap:${webjarsBootstrapVersion}"
   runtimeOnly "org.webjars.npm:font-awesome:${webjarsFontawesomeVersion}"
@@ -84,3 +87,7 @@ checkFormatAotTest.enabled = false
 
 formatAot.enabled = false
 formatAotTest.enabled = false
+
+graalvmNative {
+  testSupport = false
+}

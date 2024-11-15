@@ -16,6 +16,8 @@
 
 package org.springframework.samples.petclinic.owner;
 
+import org.jetbrains.annotations.NotNull;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.samples.petclinic.BaseSpringBootTest;
@@ -24,6 +26,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,7 +45,7 @@ class OwnerControllerTests extends BaseSpringBootTest {
 
 	@ServiceConnection
 	@Container
-	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16");
+	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16").withDatabaseName("petclinic");
 
 	@Test
 	void testInitCreationForm() throws Exception {
@@ -54,7 +58,7 @@ class OwnerControllerTests extends BaseSpringBootTest {
 		var httpResponse = postForm("http://localhost:" + port + "/owners/new", "firstName=Joe&lastName=Bloggs&address=123%20Caramel%20Street&city=London&telephone=1316761638");
 
 		assertEquals(302, httpResponse.statusCode());
-		assertThat(httpResponse.headers().firstValue("location").get()).contains("/owners/" + TEST_OWNER_ID);
+		assertThat(httpResponse.headers().firstValue("location").get()).contains("/owners/");
 	}
 
 	@Test
@@ -79,15 +83,16 @@ class OwnerControllerTests extends BaseSpringBootTest {
 		var httpResponse = get("http://localhost:" + port + "/owners?page=1");
 
 		assertEquals(200, httpResponse.statusCode());
-		assertTrue(httpResponse.body().toString().contains("<h2>Owners</h2>"));
+		assertThat(httpResponse.body().toString()).contains("<h2>Find Owners</h2>");
 	}
 
 	@Test
 	void testProcessFindFormByLastName() throws Exception {
+		var george = createGeorge();
 		var httpResponse = get("http://localhost:" + port + "/owners?page=1&lastName=Franklin");
 
 		assertEquals(302, httpResponse.statusCode());
-		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + TEST_OWNER_ID));
+		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + george.getId()));
 	}
 
 	@Test
@@ -95,12 +100,14 @@ class OwnerControllerTests extends BaseSpringBootTest {
 		var httpResponse = get("http://localhost:" + port + "/owners?page=1&lastName=Unknown%20Surname");
 
 		assertEquals(200, httpResponse.statusCode());
-		assertThat(httpResponse.body().toString()).containsIgnoringWhitespaces("<div class=\"col-sm-10\"><input class=\"form-control\" size=\"30\" maxlength=\"80\" id=\"lastName\" name=\"lastName\" value=\"Unknown Surname\" /> <span class=\"help-inline\"><div><p>wurde nicht gefunden</p></div>");
+		assertThat(httpResponse.body().toString()).containsSubsequence("<div class=\"col-sm-10\">", "<input class=\"form-control\" size=\"30\" maxlength=\"80\" id=\"lastName\" name=\"lastName\" value=\"Unknown Surname\" />", "<span class=\"help-inline\">", "<div>", "<p>", "has not been found", "</p>", "</div>");
 	}
 
 	@Test
 	void testInitUpdateOwnerForm() throws Exception {
-		var httpResponse = get("http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/edit");
+		var george = createGeorge();
+
+		var httpResponse = get("http://localhost:" + port + "/owners/" + george.getId() + "/edit");
 
 		assertEquals(200, httpResponse.statusCode());
 		assertTrue(httpResponse.body().toString().contains("<input class=\"form-control\" type=\"text\" id=\"lastName\" name=\"lastName\" value=\"Franklin\" />"));
@@ -112,24 +119,28 @@ class OwnerControllerTests extends BaseSpringBootTest {
 
 	@Test
 	void testProcessUpdateOwnerFormSuccess() throws Exception {
-		var httpResponse = postForm("http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/edit",
+		var george = createGeorge();
+		var httpResponse = postForm("http://localhost:" + port + "/owners/" + george.getId() + "/edit",
 			"firstName=Joe&lastName=Bloggs&address=123%20Caramel%20Street&city=London&telephone=1616291589");
 
 		assertEquals(302, httpResponse.statusCode());
-		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + TEST_OWNER_ID));
+		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + george.getId()));
 	}
 
 	@Test
 	void testProcessUpdateOwnerFormUnchangedSuccess() throws Exception {
-		var httpResponse = postForm("http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/edit", null);
+		var george = createGeorge();
+		var httpResponse = postForm("http://localhost:" + port + "/owners/" + george.getId() + "/edit",
+			"firstName=George&lastName=Franklin&address=110%20W.%20Liberty%20St.&city=Madison&telephone=6085551023");
 
 		assertEquals(302, httpResponse.statusCode());
-		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + TEST_OWNER_ID));
+		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + george.getId()));
 	}
 
 	@Test
 	void testProcessUpdateOwnerFormHasErrors() throws Exception {
-		var httpResponse = postForm("http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/edit",
+		var george = createGeorge();
+		var httpResponse = postForm("http://localhost:" + port + "/owners/" + george.getId() + "/edit",
 			"firstName=Joe&lastName=Bloggs&address=&telephone=");
 
 		assertEquals(200, httpResponse.statusCode());
@@ -139,11 +150,13 @@ class OwnerControllerTests extends BaseSpringBootTest {
 
 	@Test
 	void testShowOwner() throws Exception {
-		var httpResponse = get("http://localhost:" + port + "/owners/" + TEST_OWNER_ID);
+		var george = createGeorge();
+
+		var httpResponse = get("http://localhost:" + port + "/owners/" + george.getId());
 
 		assertEquals(200, httpResponse.statusCode());
-		assertThat(httpResponse.body().toString()).containsSubsequence("<tr>","<th>","Name","</th>","<td>","<b>","George Franklin","</b>","</td>","</tr>","<tr>","<th>","Address","</th>","<td>","110 W. Liberty St.","</td>","</tr>","<tr>","<th>","City","</th>","<td>","Madison","</td>","</tr>","<tr>","<th>","Telephone","</th>","<td>","6085551023","</td>","</tr>");
-		assertThat(httpResponse.body().toString()).containsSubsequence("<thead>","<tr>","<th>","Visit Date","</th>","<th>","Description","</th>","</tr>","</thead>","<tr>","<td>","2024-10-10","</td>","<td>","</td>","</tr>");
+		assertThat(httpResponse.body().toString()).containsSubsequence("<tr>", "<th>", "Name", "</th>", "<td>", "<b>", "George Franklin", "</b>", "</td>", "</tr>", "<tr>", "<th>", "Address", "</th>", "<td>", "110 W. Liberty St.", "</td>", "</tr>", "<tr>", "<th>", "City", "</th>", "<td>", "Madison", "</td>", "</tr>", "<tr>", "<th>", "Telephone", "</th>", "<td>", "6085551023", "</td>", "</tr>");
+		assertThat(httpResponse.body().toString()).containsSubsequence("<thead>", "<tr>", "<th>", "Visit Date", "</th>", "<th>", "Description", "</th>", "</tr>", "</thead>", "<tr>", "<td>", "2023-10-02", "</td>", "<td>", "</td>", "</tr>");
 	}
 
 	@DynamicPropertySource

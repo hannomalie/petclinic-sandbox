@@ -1,0 +1,315 @@
+/*
+ * Copyright 2012-2019 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.springframework.samples.petclinic.owner;
+
+import java.math.BigInteger;
+import java.util.List;
+import java.util.Map;
+
+import org.jdbi.v3.core.Jdbi;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
+import org.springframework.samples.petclinic.vet.Specialty;
+import org.springframework.samples.petclinic.vet.Vet;
+import org.springframework.stereotype.Component;
+
+import javax.sql.DataSource;
+
+/**
+ * Repository class for <code>Owner</code> domain objects All method names are compliant
+ * with Spring Data naming conventions so this interface can easily be extended for Spring
+ * Data. See:
+ * https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#repositories.query-methods.query-creation
+ *
+ * @author Ken Krebs
+ * @author Juergen Hoeller
+ * @author Sam Brannen
+ * @author Michael Isvy
+ */
+@Component
+public class Database {
+
+	private final Jdbi jdbi;
+	public Database(DataSource dataSource, @Value("${spring.datasource.url}") String url, @Value("${spring.datasource.username}") String username, @Value("${spring.datasource.password}") String password) {
+//		this.jdbi = Jdbi.create(url, username, password);
+		this.jdbi = Jdbi.create(dataSource);
+
+//		this.jdbi = Jdbi.create(dataSource.getConnection().getMetaData().getURL(), "test", "test");
+//		this.jdbi = Jdbi.create(dataSource);//dataSource.getConnection().getMetaData().getURL(), username, password);
+	}
+
+	/**
+	 * Retrieve all {@link PetType}s from the data store.
+	 * @return a Collection of {@link PetType}s.
+	 */
+	public List<PetType> findPetTypes() {
+		return jdbi.inTransaction(handle -> handle.createQuery("SELECT id, name FROM types ORDER BY name")
+			.mapToBean(PetType.class)
+			.list());
+	}
+
+	/**
+	 * Retrieve {@link Owner}s from the data store by last name, returning all owners
+	 * whose last name <i>starts</i> with the given name.
+	 * @param lastName Value to search for
+	 * @return a Collection of matching {@link Owner}s (or an empty Collection if none
+	 * found)
+	 */
+
+	public Page<OwnerAndPets> findByLastName(@Param("lastName") String lastName, Pageable pageable) {
+		List<OwnerAndPets> results = jdbi.inTransaction(handle -> {
+			var owners = handle.createQuery("SELECT DISTINCT * FROM owners WHERE last_name LIKE CONCAT(:lastName, '%')")
+				.bind("lastName", lastName).mapToBean(Owner.class).list();
+			return owners.stream().map(owner -> {
+				var pets = handle.createQuery("SELECT * FROM pets WHERE owner_id = :id")
+					.bind("id", owner.getId())
+					.mapToBean(Pet.class).list();
+				return new OwnerAndPets(owner, pets);
+			}).toList();
+		});
+
+		return new PageImpl<>(results, pageable, results.size());
+	}
+
+	/**
+	 * Retrieve an {@link Owner} from the data store by id.
+	 * @param id the id to search for
+	 * @return the {@link Owner} if found
+	 */
+	public OwnerAndPets findOwnerAndPetsByOwnerId(Integer id) {
+		 return jdbi.inTransaction(handle -> {
+			var optionalOwner = handle.createQuery("SELECT * FROM owners WHERE id = :id").bind("id", id).mapToBean(Owner.class).findFirst();
+			if(optionalOwner.isPresent()) {
+				var owner = optionalOwner.get();
+				var pets = handle.createQuery("SELECT * FROM pets WHERE owner_id = :id")
+					.bind("id", id)
+					.mapToBean(Pet.class).list();
+				return new OwnerAndPets(owner, pets);
+			} else {
+				return null;
+			}
+		});
+	}
+	public List<Visit> findVisitsForPet(Integer petId) {
+		return jdbi.withHandle(handle -> handle.createQuery("SELECT * FROM visits WHERE pet_id =:id")
+			.bind("id", petId)
+			.map((rs, ctx) -> {
+				var visit = new Visit();
+				visit.setId(rs.getInt("id"));
+				visit.setDescription(rs.getString("description"));
+				visit.setDate(rs.getDate("visit_date").toLocalDate());
+
+				return visit;
+				})
+			.list());
+	}
+
+	/**
+	 * Save an {@link Owner} to the data store, either inserting or updating it.
+	 * @param owner the {@link Owner} to save
+	 */
+	public Owner save(Owner owner) {
+		jdbi.inTransaction(handle -> {
+			var updatedRowsCount = owner.getId() == null ? 0 : handle.createUpdate("""
+				update owners
+				set first_name = :firstName, last_name = :lastName, address = :address, city = :city, telephone = :telephone
+				where id = :id
+				RETURNING *
+				""")
+				.bindBean(owner)
+				.execute();
+			if(updatedRowsCount == 0) {
+				Map<String, Object> id = handle.createUpdate("""
+						insert into owners (first_name, last_name, address, city, telephone) values (:firstName, :lastName, :address, :city, :telephone)
+						""")
+					.bindBean(owner)
+					.executeAndReturnGeneratedKeys("id")
+					.mapToMap().one();
+				var idObject = id.values().stream().findFirst().get();
+				if (idObject instanceof BigInteger) {
+					owner.setId(((BigInteger) idObject).intValue());
+				} else if (idObject instanceof Integer) {
+					owner.setId((Integer) idObject);
+				}  else if (idObject instanceof Long) {
+					owner.setId(((Long) idObject).intValue());
+				} else {
+					throw new IllegalStateException("Don't understand id value: " + idObject);
+				}
+			}
+			return null;
+		});
+		return owner;
+	}
+
+	/**
+	 * Returns all the owners from data store
+	 **/
+	public Page<Owner> findAll(Pageable pageable) {
+		return new PageImpl<>(jdbi.inTransaction(handle -> handle.createQuery(
+				"SELECT owner FROM Owner owner")
+			.mapToBean(Owner.class)
+			.list()));
+	}
+
+	public void clear() {
+		jdbi.inTransaction(handle -> {
+			handle.createUpdate("delete from visits;").execute();
+			handle.createUpdate("delete from pets;").execute();
+			handle.createUpdate("delete from owners;").execute();
+			handle.createUpdate("delete from vet_specialties;").execute();
+			handle.createUpdate("delete from vets;").execute();
+			return null;
+		});
+	}
+
+	public Pet save(Pet pet) {
+		jdbi.inTransaction(handle -> {
+			var updatedRowsCount = pet.getId() == null ? 0 : handle.createUpdate("""
+				update pets
+				set name = :name, birth_date = :birthDate, type_id = :typeId, owner_id = :ownerId
+				where id = :id
+				RETURNING *
+				""")
+				.bindBean(pet)
+				.bind("typeId", pet.getType().getId())
+				.execute();
+			if(updatedRowsCount == 0) {
+				var id = handle.createUpdate("""
+					insert into pets (name, birth_date, type_id, owner_id) values (:name, :birthDate, :typeId, :ownerId)
+					""")
+					.bindBean(pet)
+					.bind("typeId", pet.getType().getId())
+					.executeAndReturnGeneratedKeys("id")
+					.mapToMap().one();
+				pet.setId((Integer) id.get("id"));
+			}
+			return null;
+		});
+
+		return pet;
+	}
+	public Visit save(Visit visit, Integer petId) {
+		jdbi.inTransaction(handle -> {
+			var updatedRowsCount = visit.getId() == null ? 0 : handle.createUpdate("""
+				update visits
+				set pet_id = :petId, visit_date = :date, description = :description
+				where id = :id
+				RETURNING *
+				""")
+				.bindBean(visit)
+				.bind("petId", petId)
+				.execute();
+			if(updatedRowsCount == 0) {
+				var id = handle.createUpdate("""
+					insert into visits (pet_id, visit_date, description) values (:petId, :date, :description)
+					""")
+					.bindBean(visit)
+					.bind("petId", petId)
+					.executeAndReturnGeneratedKeys("id")
+					.mapToMap().one();
+				visit.setId((Integer) id.get("id"));
+			}
+			return null;
+		});
+
+		return visit;
+	}
+	public void save(List<Pet> pets) {
+		for (Pet pet : pets) {
+			save(pet);
+		}
+	}
+
+	public List<Vet> findAllVets() {
+		return jdbi.withHandle(handle -> handle.createQuery("select * from vets").mapToBean(Vet.class).list());
+	}
+	public Page<Vet> findAllVetsPageable(Pageable pageable) {
+		List<Vet> allVets = findAllVets();
+		return new PageImpl(allVets, pageable, allVets.size());
+	}
+
+	public Pet findPetById(int petId) {
+		return jdbi.withHandle(handle -> handle.createQuery("select * from pets where id = :id").bind("id", petId).mapToBean(Pet.class).findFirst().orElse(null));
+	}
+
+	public Vet save(Vet vet) {
+		jdbi.inTransaction(handle -> {
+			var updatedRowsCount = vet.getId() == null ? 0 : handle.createUpdate("""
+				update vets
+				set first_name = :firstName, last_name = :lastName
+				where id = :id
+				RETURNING *
+				""")
+				.bindBean(vet)
+				.execute();
+			if(updatedRowsCount == 0) {
+				var id = handle.createUpdate("""
+					insert into vets (first_name, last_name) values (:firstName, :lastName)
+					""")
+					.bindBean(vet)
+					.executeAndReturnGeneratedKeys("id")
+					.mapToMap().one();
+				vet.setId((Integer) id.get("id"));
+			}
+			return null;
+		});
+
+		return vet;
+	}
+
+	public Specialty save(Specialty specialty) {
+		jdbi.inTransaction(handle -> {
+			var updatedRowsCount = specialty.getId() == null ? 0 : handle.createUpdate("""
+				update specialties
+				set name = :name
+				where id = :id
+				RETURNING *
+				""")
+				.bindBean(specialty)
+				.execute();
+			if(updatedRowsCount == 0) {
+				var id = handle.createUpdate("""
+					insert into specialties (name) values (:name)
+					""")
+					.bindBean(specialty)
+					.executeAndReturnGeneratedKeys("id")
+					.mapToMap().one();
+				specialty.setId((Integer) id.get("id"));
+			}
+			return null;
+		});
+
+		return specialty;
+	}
+
+	public void saveSpecialtyFor(Vet vet, Specialty specialty) {
+		jdbi.inTransaction(handle -> {
+			return specialty.getId() == null ? 0 : handle.createUpdate("""
+					insert into vet_specialties values (:vetId, :specialtyId)
+					""")
+				.bind("vetId", vet.getId())
+				.bind("specialtyId", specialty.getId())
+				.execute();
+		});
+	}
+
+	public List<Specialty> getSpecialtiesForVet(Vet vet) {
+		return jdbi.withHandle(handle -> handle.createQuery("select * from vet_specialties left join specialties on specialty_id = id where vet_id = :vetId").bind("vetId", vet.getId()).mapToBean(Specialty.class).list());
+	}
+}

@@ -39,10 +39,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 class VisitController {
 
-	private final OwnerRepository owners;
+	private final Database database;
 
-	public VisitController(OwnerRepository owners) {
-		this.owners = owners;
+	public VisitController(Database database) {
+		this.database = database;
 	}
 
 	@InitBinder
@@ -54,20 +54,24 @@ class VisitController {
 	 * Called before each and every @RequestMapping annotated method. 2 goals: - Make sure
 	 * we always have fresh data - Since we do not use the session scope, make sure that
 	 * Pet object always has an id (Even though id is not part of the form fields)
+	 *
 	 * @param petId
 	 * @return Pet
 	 */
 	@ModelAttribute("visit")
 	public Visit loadPetWithVisit(@PathVariable("ownerId") int ownerId, @PathVariable("petId") int petId,
-			Map<String, Object> model) {
-		Owner owner = this.owners.findById(ownerId);
+														Map<String, Object> model) {
+		OwnerAndPets ownerAndPets = database.findOwnerAndPetsByOwnerId(ownerId);
+		var owner = ownerAndPets.owner();
+		var pets = ownerAndPets.pets();
 
-		Pet pet = owner.getPet(petId);
+		var pet = pets.stream().filter(it -> it.getId().equals(petId)).findFirst().get();
+
 		model.put("pet", pet);
 		model.put("owner", owner);
 
 		Visit visit = new Visit();
-		pet.addVisit(visit);
+//		return database.save(visit, petId);
 		return visit;
 	}
 
@@ -87,8 +91,7 @@ class VisitController {
 			return "pets/createOrUpdateVisitForm";
 		}
 
-		owner.addVisit(petId, visit);
-		this.owners.save(owner);
+		database.save(visit, petId);
 		redirectAttributes.addFlashAttribute("message", "Your visit has been booked");
 		return "redirect:/owners/{ownerId}";
 	}

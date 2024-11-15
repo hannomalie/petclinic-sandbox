@@ -37,16 +37,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Testcontainers(disabledWithoutDocker = true)
 class VisitControllerTests extends BaseSpringBootTest {
 
-	private static final int TEST_OWNER_ID = 1;
-	private static final int TEST_PET_ID = 1;
-
 	@ServiceConnection
 	@Container
 	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16");
 
 	@Test
 	void testInitNewVisitForm() throws Exception {
-		var httpResponse = get("http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/pets/" + TEST_PET_ID + "/visits/new");
+		var ownerAndPets = createOwnerAndPets();
+		var httpResponse = get("http://localhost:" + port + "/owners/" + ownerAndPets.owner().getId() + "/pets/" + ownerAndPets.pets().get(0).getId() + "/visits/new");
 
 		Assertions.assertEquals(200, httpResponse.statusCode());
 		assertThat(httpResponse.body().toString()).containsIgnoringWhitespaces("<h2>New Visit</h2>");
@@ -54,16 +52,18 @@ class VisitControllerTests extends BaseSpringBootTest {
 
 	@Test
 	void testProcessNewVisitFormSuccess() throws Exception {
-		var httpResponse = postForm("http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/pets/" + TEST_PET_ID + "/visits/new",
+		var ownerAndPets = createOwnerAndPets();
+		var httpResponse = postForm("http://localhost:" + port + "/owners/" + ownerAndPets.owner().getId() + "/pets/" + ownerAndPets.pets().stream().findFirst().get().getId() + "/visits/new",
 			"name=George&description=Visit%20Description");
 
 		Assertions.assertEquals(302, httpResponse.statusCode());
-		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + TEST_OWNER_ID));
+		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + ownerAndPets.owner().getId()));
 	}
 
 	@Test
 	void testProcessNewVisitFormHasErrors() throws Exception {
-		var httpResponse = postForm("http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/pets/" + TEST_PET_ID + "/visits/new",
+		var ownerAndPets = createOwnerAndPets();
+		var httpResponse = postForm("http://localhost:" + port + "/owners/" + ownerAndPets.owner().getId() + "/pets/" + ownerAndPets.pets().stream().findFirst().get().getId() + "/visits/new",
 			"name=George");
 		Assertions.assertEquals(200, httpResponse.statusCode());
 		org.assertj.core.api.Assertions.assertThat(httpResponse.body().toString()).containsSubsequence("<div class=\"form-group has-error\">", "<label class=\"col-sm-2 control-label\">", "Description", "</label>", "</div>");

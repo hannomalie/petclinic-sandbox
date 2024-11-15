@@ -22,7 +22,13 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.samples.petclinic.BaseSpringBootTest;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
@@ -40,13 +46,12 @@ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironmen
 // NOT Waiting https://github.com/spring-projects/spring-boot/issues/5574
 @SpringBootTest(webEnvironment = RANDOM_PORT,
 		properties = { "server.error.include-message=ALWAYS", "management.endpoints.enabled-by-default=false" })
+@Testcontainers(disabledWithoutDocker = true)
 class CrashControllerIntegrationTests extends BaseSpringBootTest {
 
-	@SpringBootApplication(exclude = { DataSourceAutoConfiguration.class,
-			DataSourceTransactionManagerAutoConfiguration.class, HibernateJpaAutoConfiguration.class })
-	static class TestConfiguration {
-
-	}
+	@ServiceConnection
+	@Container
+	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16").withDatabaseName("petclinic");
 
 	@Test
 	void testTriggerExceptionJson() throws Exception {
@@ -76,4 +81,8 @@ class CrashControllerIntegrationTests extends BaseSpringBootTest {
 
 	}
 
+	@DynamicPropertySource
+	static void registerDataSourceProperties(DynamicPropertyRegistry registry) {
+		registerDataSourceProperties(registry, container);
+	}
 }

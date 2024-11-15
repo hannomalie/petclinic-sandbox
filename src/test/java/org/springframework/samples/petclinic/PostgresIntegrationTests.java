@@ -20,8 +20,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.http.HttpStatus;
-import org.springframework.samples.petclinic.vet.VetRepository;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
@@ -39,9 +37,6 @@ public class PostgresIntegrationTests extends BaseSpringBootTest {
 	@Container
 	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16");
 
-	@Autowired
-	private VetRepository vets;
-
 	@BeforeAll
 	static void available() {
 		assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker not available");
@@ -49,13 +44,13 @@ public class PostgresIntegrationTests extends BaseSpringBootTest {
 
 	@Test
 	void testFindAll() throws Exception {
-		vets.findAll();
-		vets.findAll(); // served from cache
+		database.findAllVets();
 	}
 
 	@Test
 	void testOwnerDetails() throws Exception {
-		var httpResponse = get("http://localhost:" + port + "/owners/1");
+		var george = createGeorge();
+		var httpResponse = get("http://localhost:" + port + "/owners/" + george.getId());
 		assertThat(httpResponse.statusCode()).isEqualTo(200);
 	}
 

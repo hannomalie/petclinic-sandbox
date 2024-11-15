@@ -39,16 +39,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Testcontainers(disabledWithoutDocker = true)
 class PetControllerTests extends BaseSpringBootTest {
 
-	private static final int TEST_OWNER_ID = 1;
-	private static final int TEST_PET_ID = 1;
-
 	@ServiceConnection
 	@Container
 	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16");
 
 	@Test
 	void testInitCreationForm() throws Exception {
-		var httpResponse = get("http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/pets/new");
+		var george = createGeorge();
+		var httpResponse = get("http://localhost:" + port + "/owners/" + george.getId() + "/pets/new");
 
 		assertEquals(200, httpResponse.statusCode());
 		assertThat(httpResponse.body().toString()).containsIgnoringWhitespaces("<h2>New Pet</h2>");
@@ -57,19 +55,21 @@ class PetControllerTests extends BaseSpringBootTest {
 
 	@Test
 	void testProcessCreationFormSuccess() throws Exception {
+		var george = createGeorge();
 		var httpResponse = postForm(
-			"http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/pets/new",
+			"http://localhost:" + port + "/owners/" + george.getId() + "/pets/new",
 			"name=Betty&type=hamster&birthDate=2015-02-12"
 		);
 
 		assertEquals(302, httpResponse.statusCode());
-		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + TEST_OWNER_ID));
+		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + george.getId()));
 	}
 
 	@Test
 	void testProcessCreationFormHasErrors() throws Exception {
+		var george = createGeorge();
 		var httpResponse = postForm(
-			"http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/pets/new",
+			"http://localhost:" + port + "/owners/" + george.getId() + "/pets/new",
 			"name=Betty&birthDate=2015-02-12"
 		);
 
@@ -79,7 +79,8 @@ class PetControllerTests extends BaseSpringBootTest {
 
 	@Test
 	void testInitUpdateForm() throws Exception {
-		var httpResponse = get("http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/pets/" + TEST_PET_ID + "/edit");
+		var ownerAndPets = createOwnerAndPets();
+		var httpResponse = get("http://localhost:" + port + "/owners/" + ownerAndPets.owner().getId() + "/pets/" + ownerAndPets.pets().get(0).getId() + "/edit");
 
 		assertEquals(200, httpResponse.statusCode());
 		Assertions.assertThat(httpResponse.body().toString()).containsIgnoringWhitespaces("<button class=\"btn btn-primary\" type=\"submit\">Update Pet</button>");
@@ -87,20 +88,22 @@ class PetControllerTests extends BaseSpringBootTest {
 
 	@Test
 	void testProcessUpdateFormSuccess() throws Exception {
+		var ownerAndPets = createOwnerAndPets();
 		var httpResponse = postForm(
-			"http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/pets/" + TEST_PET_ID + "/edit",
+			"http://localhost:" + port + "/owners/" + ownerAndPets.owner().getId() + "/pets/" + ownerAndPets.pets().stream().findFirst().get().getId() + "/edit",
 			"name=BettyZZZ&type=hamster&birthDate=2015-02-12"
 		);
 
 		assertEquals(302, httpResponse.statusCode());
-		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + TEST_OWNER_ID));
+		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + ownerAndPets.owner().getId()));
 	}
 
 	@Test
 	@Disabled("I don't know how to exactly resemble that case")
 	void testProcessUpdateFormHasErrors() throws Exception {
+		var ownerAndPets = createOwnerAndPets();
 		var httpResponse = postForm(
-			"http://localhost:" + port + "/owners/" + TEST_OWNER_ID + "/pets/" + TEST_PET_ID + "/edit",
+			"http://localhost:" + port + "/owners/" + ownerAndPets.owner().getId() + "/pets/" + ownerAndPets.pets().stream().findFirst().get().getId() + "/edit",
 			"id=&name=Betty&birthDate=2015-02-12"
 		);
 

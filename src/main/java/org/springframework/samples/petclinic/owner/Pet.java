@@ -40,21 +40,16 @@ import jakarta.persistence.Table;
  * @author Juergen Hoeller
  * @author Sam Brannen
  */
-@Entity
-@Table(name = "pets")
 public class Pet extends NamedEntity {
 
-	@Column(name = "birth_date")
+	private Integer ownerId;
+
 	@DateTimeFormat(pattern = "yyyy-MM-dd")
 	private LocalDate birthDate;
 
-	@ManyToOne
-	@JoinColumn(name = "type_id")
 	private PetType type;
 
-	@OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
-	@JoinColumn(name = "pet_id")
-	@OrderBy("visit_date ASC")
+//	@OrderBy("visit_date ASC") TODO: Add order to queries
 	private final Set<Visit> visits = new LinkedHashSet<>();
 
 	public void setBirthDate(LocalDate birthDate) {
@@ -81,4 +76,11 @@ public class Pet extends NamedEntity {
 		getVisits().add(visit);
 	}
 
+	public Integer getOwnerId() {
+		return ownerId;
+	}
+
+	public void setOwnerId(Integer ownerId) {
+		this.ownerId = ownerId;
+	}
 }
