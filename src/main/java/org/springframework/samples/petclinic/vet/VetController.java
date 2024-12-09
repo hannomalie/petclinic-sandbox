@@ -15,17 +15,25 @@
  */
 package org.springframework.samples.petclinic.vet;
 
+import java.util.HashMap;
 import java.util.List;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.catalina.connector.Response;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.RequestEntity;
+import org.springframework.http.ResponseEntity;
 import org.springframework.samples.petclinic.owner.Database;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
+
+import static org.springframework.samples.petclinic.system.Templating.htmlHeaders;
+import static org.springframework.samples.petclinic.system.Templating.renderView;
 
 /**
  * @author Juergen Hoeller
@@ -42,38 +50,30 @@ class VetController {
 		this.database = vetRepository;
 	}
 
-	@GetMapping("/vets.html")
-	public String showVetList(@RequestParam(defaultValue = "1") int page, Model model) {
-		// Here we are returning an object of type 'Vets' rather than a collection of Vet
-		// objects so it is simpler for Object-Xml mapping
-		Vets vets = new Vets();
-		Page<Vet> paginated = findPaginated(page);
-		vets.getVetList().addAll(paginated.toList());
-		return addPaginationModel(page, paginated, model);
-	}
-
-	private String addPaginationModel(int page, Page<Vet> paginated, Model model) {
-		List<Vet> listVets = paginated.getContent();
-		model.addAttribute("currentPage", page);
-		model.addAttribute("totalPages", paginated.getTotalPages());
-		model.addAttribute("totalItems", paginated.getTotalElements());
-		model.addAttribute("listVets", listVets);
-		return "vets/vetList";
-	}
-
-	private Page<Vet> findPaginated(int page) {
-		int pageSize = 5;
-		Pageable pageable = PageRequest.of(page - 1, pageSize);
-		return database.findAllVetsPageable(pageable);
-	}
-
-	@GetMapping({ "/vets" })
-	public @ResponseBody Vets showResourcesVetList() {
-		// Here we are returning an object of type 'Vets' rather than a collection of Vet
-		// objects so it is simpler for JSon/Object mapping
+	@GetMapping("/vets")
+	public ResponseEntity<String> showVets(@RequestParam(defaultValue = "1") int page, RequestEntity request, ObjectMapper mapper) throws JsonProcessingException {
 		Vets vets = new Vets();
 		vets.getVetList().addAll(this.database.findAllVets());
-		return vets;
-	}
 
+		var acceptHeader = request.getHeaders().get("Accept");
+		if(!acceptHeader.isEmpty() && acceptHeader.get(0).equals("application/json")) {
+			var responseBody = mapper.writeValueAsString(vets);
+			var jsonHeaders = new HttpHeaders();
+			jsonHeaders.add("Content-Type", "application/json");
+			return new ResponseEntity<>(responseBody, jsonHeaders, Response.SC_OK);
+		} else {
+			var model = new HashMap<String, Object>();
+			model.put("vets", vets.getVetList());
+			int pageSize = 5;
+			Pageable pageable = PageRequest.of(page - 1, pageSize);
+			Page<Vet> paginated = database.findAllVetsPageable(pageable);
+			vets.getVetList().addAll(paginated.toList());
+			List<Vet> listVets = paginated.getContent();
+			model.put("currentPage", page);
+			model.put("totalPages", paginated.getTotalPages());
+			model.put("totalItems", paginated.getTotalElements());
+			model.put("listVets", listVets);
+			return new ResponseEntity<>(renderView("vets/vetList", model, null), htmlHeaders, Response.SC_OK);
+		}
+	}
 }

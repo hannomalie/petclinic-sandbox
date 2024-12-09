@@ -15,8 +15,19 @@
  */
 package org.springframework.samples.petclinic.system;
 
+import org.apache.catalina.connector.Response;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.RequestEntity;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
+
+import java.time.LocalDate;
+import java.util.HashMap;
+
+import static org.springframework.samples.petclinic.system.Templating.htmlHeaders;
+import static org.springframework.samples.petclinic.system.Templating.renderView;
 
 /**
  * Controller used to showcase what happens when an exception is thrown
@@ -29,9 +40,24 @@ import org.springframework.web.bind.annotation.GetMapping;
 class CrashController {
 
 	@GetMapping("/oups")
-	public String triggerException() {
-		throw new RuntimeException(
-				"Expected: controller used to showcase what " + "happens when an exception is thrown");
+	public ResponseEntity<String> triggerException(RequestEntity request) {
+		var acceptHeader = request.getHeaders().get("Accept");
+		if(!acceptHeader.isEmpty() && acceptHeader.get(0).equals("application/json")) {
+
+			var jsonHeaders = new HttpHeaders();
+			jsonHeaders.add("Content-Type", "application/json");
+			return new ResponseEntity<>("{ " +
+				"\"timestamp\":\"" + LocalDate.now() + "\", " +
+				"\"status\": 500, " +
+				"\"path\": \"/oups\", " +
+				"\"error\": \"Expected: controller used to showcase what happens when an exception is thrown\", " +
+				"\"message\": \"Expected: controller used to showcase what happens when an exception is thrown\"" +
+				" }", jsonHeaders, Response.SC_INTERNAL_SERVER_ERROR);
+		} else {
+			var model = new HashMap<String, Object>();
+			model.put("message", "Expected: controller used to showcase what happens when an exception is thrown");
+			return new ResponseEntity<>(renderView("error", model, null), htmlHeaders, Response.SC_INTERNAL_SERVER_ERROR);
+		}
 	}
 
 }

@@ -50,7 +50,7 @@ class OwnerControllerTests extends BaseSpringBootTest {
 	@Test
 	void testInitCreationForm() throws Exception {
 		var httpResponse = get("http://localhost:" + port + "/owners/new");
-		assertTrue(httpResponse.body().toString().contains("<form class=\"form-horizontal\" id=\"add-owner-form\" method=\"post\">"));
+		assertThat(httpResponse.body().toString()).contains("<form class=\"form-horizontal\" id=\"add-owner-form\" method=\"post\">");
 	}
 
 	@Test
@@ -100,7 +100,7 @@ class OwnerControllerTests extends BaseSpringBootTest {
 		var httpResponse = get("http://localhost:" + port + "/owners?page=1&lastName=Unknown%20Surname");
 
 		assertEquals(200, httpResponse.statusCode());
-		assertThat(httpResponse.body().toString()).containsSubsequence("<div class=\"col-sm-10\">", "<input class=\"form-control\" size=\"30\" maxlength=\"80\" id=\"lastName\" name=\"lastName\" value=\"Unknown Surname\" />", "<span class=\"help-inline\">", "<div>", "<p>", "has not been found", "</p>", "</div>");
+		assertThat(httpResponse.body().toString()).containsSubsequence("<div class=\"col-sm-10\">", "<input class=\"form-control\" id=\"lastName\" name=\"lastName\" value=\"Unknown Surname\" size=\"30\" maxlength=\"80\" />", "<span class=\"help-inline\">", "<div>", "<p>", "has not been found", "</p>", "</div>");
 	}
 
 	@Test
@@ -110,11 +110,11 @@ class OwnerControllerTests extends BaseSpringBootTest {
 		var httpResponse = get("http://localhost:" + port + "/owners/" + george.getId() + "/edit");
 
 		assertEquals(200, httpResponse.statusCode());
-		assertTrue(httpResponse.body().toString().contains("<input class=\"form-control\" type=\"text\" id=\"lastName\" name=\"lastName\" value=\"Franklin\" />"));
-		assertTrue(httpResponse.body().toString().contains("<input class=\"form-control\" type=\"text\" id=\"firstName\" name=\"firstName\" value=\"George\" />"));
-		assertTrue(httpResponse.body().toString().contains("<input class=\"form-control\" type=\"text\" id=\"address\" name=\"address\" value=\"110 W. Liberty St.\" />"));
-		assertTrue(httpResponse.body().toString().contains("<input class=\"form-control\" type=\"text\" id=\"city\" name=\"city\" value=\"Madison\" />"));
-		assertTrue(httpResponse.body().toString().contains("<input class=\"form-control\" type=\"text\" id=\"telephone\" name=\"telephone\" value=\"6085551023\" />"));
+		assertThat(httpResponse.body().toString()).contains("<input class=\"form-control\" type=\"text\" id=\"lastName\" name=\"lastName\" value=\"Franklin\" />");
+		assertThat(httpResponse.body().toString()).contains("<input class=\"form-control\" type=\"text\" id=\"firstName\" name=\"firstName\" value=\"George\" />");
+		assertThat(httpResponse.body().toString()).contains("<input class=\"form-control\" type=\"text\" id=\"address\" name=\"address\" value=\"110 W. Liberty St.\" />");
+		assertThat(httpResponse.body().toString()).contains("<input class=\"form-control\" type=\"text\" id=\"city\" name=\"city\" value=\"Madison\" />");
+		assertThat(httpResponse.body().toString()).contains("<input class=\"form-control\" type=\"text\" id=\"telephone\" name=\"telephone\" value=\"6085551023\" />");
 	}
 
 	@Test

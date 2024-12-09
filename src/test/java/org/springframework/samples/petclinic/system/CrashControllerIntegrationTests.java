@@ -31,6 +31,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.net.URI;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.HashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,8 +58,11 @@ class CrashControllerIntegrationTests extends BaseSpringBootTest {
 
 	@Test
 	void testTriggerExceptionJson() throws Exception {
-		var httpResponse = get("http://localhost:" + port + "/oups");
-
+		HttpRequest request = HttpRequest.newBuilder()
+			.uri(URI.create("http://localhost:" + port + "/oups"))
+			.header("Accept", "application/json")
+			.build();
+		var httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
 		var json = new ObjectMapper().readValue(httpResponse.body().toString(), HashMap.class);
 
 		assertEquals(500, httpResponse.statusCode());

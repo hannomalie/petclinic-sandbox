@@ -16,8 +16,11 @@
 package org.springframework.samples.petclinic.owner;
 
 import java.math.BigInteger;
+import java.sql.Date;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.jdbi.v3.core.Jdbi;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,7 +49,7 @@ import javax.sql.DataSource;
 public class Database {
 
 	private final Jdbi jdbi;
-	public Database(DataSource dataSource, @Value("${spring.datasource.url}") String url, @Value("${spring.datasource.username}") String username, @Value("${spring.datasource.password}") String password) {
+	public Database(DataSource dataSource) {//, @Value("${spring.datasource.url}") String url, @Value("${spring.datasource.username}") String username, @Value("${spring.datasource.password}") String password) {
 //		this.jdbi = Jdbi.create(url, username, password);
 		this.jdbi = Jdbi.create(dataSource);
 
@@ -59,7 +62,7 @@ public class Database {
 	 * @return a Collection of {@link PetType}s.
 	 */
 	public List<PetType> findPetTypes() {
-		return jdbi.inTransaction(handle -> handle.createQuery("SELECT id, name FROM types ORDER BY name")
+		return jdbi.inTransaction(handle -> handle.createQuery("SELECT * FROM types ORDER BY name")
 			.mapToBean(PetType.class)
 			.list());
 	}
@@ -97,9 +100,42 @@ public class Database {
 			var optionalOwner = handle.createQuery("SELECT * FROM owners WHERE id = :id").bind("id", id).mapToBean(Owner.class).findFirst();
 			if(optionalOwner.isPresent()) {
 				var owner = optionalOwner.get();
-				var pets = handle.createQuery("SELECT * FROM pets WHERE owner_id = :id")
+				var pets = handle.createQuery("SELECT pets.*, types.id as pet_type_id, types.name as pet_type_name FROM pets LEFT JOIN types on pets.type_id = types.id WHERE owner_id = :id")
 					.bind("id", id)
-					.mapToBean(Pet.class).list();
+					.mapToMap()
+					.list().stream().map(it -> {
+						var pet = new Pet();
+						var petId = it.get("id");
+						if(petId instanceof Integer) {
+							pet.setId((Integer) petId);
+						} else if(petId instanceof Long) {
+							pet.setId(Math.toIntExact((Long) petId));
+						} else {
+							throw new IllegalArgumentException("petId type not supported: " + petId.getClass());
+						}
+						pet.setType(new PetType() {{
+							var petTypeId = it.get("pet_type_id");
+							if(petTypeId instanceof Integer) {
+								setId((Integer) petTypeId);
+							} else if(petTypeId instanceof Long) {
+								setId(Math.toIntExact((Long) petTypeId));
+							} else {
+								throw new IllegalArgumentException("petId type not supported: " + petTypeId.getClass());
+							}
+							setName((String) it.get("pet_type_name"));
+						}});
+						var ownerId = it.get("owner_id");
+						if(ownerId instanceof Integer) {
+							pet.setOwnerId((Integer) ownerId);
+						} else if(ownerId instanceof Long) {
+							pet.setOwnerId(Math.toIntExact((Long) ownerId));
+						} else {
+							throw new IllegalArgumentException("petId type not supported: " + ownerId.getClass());
+						}
+						pet.setName((String) it.get("name"));
+						pet.setBirthDate(((Date) it.get("birth_date")).toLocalDate());
+						return pet;
+					}).toList();
 				return new OwnerAndPets(owner, pets);
 			} else {
 				return null;
@@ -201,7 +237,6 @@ public class Database {
 			}
 			return null;
 		});
-
 		return pet;
 	}
 	public Visit save(Visit visit, Integer petId) {
@@ -245,7 +280,24 @@ public class Database {
 	}
 
 	public Pet findPetById(int petId) {
-		return jdbi.withHandle(handle -> handle.createQuery("select * from pets where id = :id").bind("id", petId).mapToBean(Pet.class).findFirst().orElse(null));
+		return jdbi.withHandle(handle -> {
+			Map<String, Object> petOrNull = handle.createQuery("select pets.*, types.id as _type_id, types.name as _type_name from pets left join types on pets.type_id = types.id where pets.id = :id ")
+				.bind("id", petId).mapToMap().findFirst().orElse(null);
+			if(petOrNull != null) {
+				var pet = new Pet();
+				pet.setId((Integer) petOrNull.get("id"));
+				pet.setOwnerId((Integer) petOrNull.get("owner_id"));
+				pet.setBirthDate(((Date) petOrNull.get("birth_date")).toLocalDate());
+				pet.setName((String) petOrNull.get("name"));
+				pet.setType(new PetType() {{
+					setId((Integer) petOrNull.get("_type_id"));
+					setName((String) petOrNull.get("_type_name"));
+				}});
+				return pet;
+			} else {
+				return null;
+			}
+		});
 	}
 
 	public Vet save(Vet vet) {
@@ -312,4 +364,5 @@ public class Database {
 	public List<Specialty> getSpecialtiesForVet(Vet vet) {
 		return jdbi.withHandle(handle -> handle.createQuery("select * from vet_specialties left join specialties on specialty_id = id where vet_id = :vetId").bind("vetId", vet.getId()).mapToBean(Specialty.class).list());
 	}
+
 }

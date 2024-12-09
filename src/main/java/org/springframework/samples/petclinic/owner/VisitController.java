@@ -17,7 +17,11 @@ package org.springframework.samples.petclinic.owner;
 
 import java.util.Map;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +32,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 
 import jakarta.validation.Valid;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import static org.springframework.samples.petclinic.system.Templating.htmlHeaders;
+import static org.springframework.samples.petclinic.system.Templating.renderView;
 
 /**
  * @author Juergen Hoeller
@@ -78,22 +85,27 @@ class VisitController {
 	// Spring MVC calls method loadPetWithVisit(...) before initNewVisitForm is
 	// called
 	@GetMapping("/owners/{ownerId}/pets/{petId}/visits/new")
-	public String initNewVisitForm() {
-		return "pets/createOrUpdateVisitForm";
+	public ResponseEntity<String> initNewVisitForm(ModelMap modelMap) {
+		return new ResponseEntity<>(renderView("pets/createOrUpdateVisitForm", modelMap, null), htmlHeaders, HttpStatus.OK);
+//		return "pets/createOrUpdateVisitForm";
 	}
 
 	// Spring MVC calls method loadPetWithVisit(...) before processNewVisitForm is
 	// called
 	@PostMapping("/owners/{ownerId}/pets/{petId}/visits/new")
-	public String processNewVisitForm(@ModelAttribute Owner owner, @PathVariable int petId, @Valid Visit visit,
-			BindingResult result, RedirectAttributes redirectAttributes) {
+	public ResponseEntity<String> processNewVisitForm(@ModelAttribute Owner owner, @PathVariable int petId, @Valid Visit visit,
+													  BindingResult result, RedirectAttributes redirectAttributes, ModelMap model) {
 		if (result.hasErrors()) {
-			return "pets/createOrUpdateVisitForm";
+			return new ResponseEntity<>(renderView("pets/createOrUpdateVisitForm", model, result), htmlHeaders, HttpStatus.OK);
+//			return "pets/createOrUpdateVisitForm";
 		}
 
 		database.save(visit, petId);
 		redirectAttributes.addFlashAttribute("message", "Your visit has been booked");
-		return "redirect:/owners/{ownerId}";
+		HttpHeaders htmlHeaders = new HttpHeaders();
+		htmlHeaders.add("Location", "/owners/" + owner.getId());
+		return new ResponseEntity<>("", htmlHeaders, HttpStatus.MOVED_TEMPORARILY);
+//		return "redirect:/owners/{ownerId}";
 	}
 
 }

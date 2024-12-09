@@ -37,7 +37,7 @@ public class BaseSpringBootTest {
 	void beforeEach() {
 		database.clear();
 	}
-	HttpClient client = HttpClient.newHttpClient();
+	protected HttpClient client = HttpClient.newHttpClient();
 	protected HttpResponse<?> get(String uri) throws IOException, InterruptedException {
 		HttpRequest request = HttpRequest.newBuilder()
 			.uri(URI.create(uri))

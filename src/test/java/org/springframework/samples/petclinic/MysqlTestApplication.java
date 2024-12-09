@@ -17,6 +17,7 @@
 package org.springframework.samples.petclinic;
 
 import org.springframework.boot.SpringApplication;
+import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.time.Duration;
@@ -38,15 +39,15 @@ public class MysqlTestApplication {
 //	}
 
 	public static void main(String[] args) {
-		//try(MySQLContainer<?> container = new MySQLContainer<>("mysql:9.0")
-		try(PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16")
+		try(MySQLContainer<?> container = new MySQLContainer<>("mysql:9.0")
+//		try(PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16")
 			.withMinimumRunningDuration(Duration.ofSeconds(5L))
 		) {
 			container.start();
 
 			SpringApplication.run(PetClinicApplication.class,
-				"--spring.profiles.active=postgres",
-//				"--spring.profiles.active=mysql",
+//				"--spring.profiles.active=postgres",
+				"--spring.profiles.active=mysql",
 				"--spring.datasource.url=" + container.getJdbcUrl(),
 				"--spring.datasource.username=" + container.getUsername(),
 				"--spring.datasource.password=" + container.getPassword());
