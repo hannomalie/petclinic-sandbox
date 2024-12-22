@@ -16,15 +16,24 @@
 
 package org.springframework.samples.petclinic.system;
 
+import org.apache.catalina.connector.Response;
+import org.springframework.cglib.core.Local;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
+import java.util.HashMap;
+import java.util.Locale;
+
+import static org.springframework.samples.petclinic.system.Templating.htmlHeaders;
+import static org.springframework.samples.petclinic.system.Templating.renderView;
+
 @Controller
 class WelcomeController {
-
 	@GetMapping("/")
-	public String welcome() {
-		return "welcome";
+	public ResponseEntity<String> welcome(Locale locale) {
+		var model = new HashMap<String, Object>();
+		model.put("welcome", Translations.get("welcome", locale));
+		return new ResponseEntity<>(renderView("welcome", model, null), htmlHeaders, Response.SC_OK);
 	}
-
 }

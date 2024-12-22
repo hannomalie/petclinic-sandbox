@@ -17,11 +17,16 @@ package org.springframework.samples.petclinic.owner;
 
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.InitBinder;
@@ -32,6 +37,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 
 import jakarta.validation.Valid;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import static org.springframework.samples.petclinic.system.Templating.htmlHeaders;
+import static org.springframework.samples.petclinic.system.Templating.renderView;
 
 /**
  * @author Juergen Hoeller
@@ -45,6 +53,8 @@ class PetController {
 	private static final String VIEWS_PETS_CREATE_OR_UPDATE_FORM = "pets/createOrUpdatePetForm";
 
 	private final Database database;
+
+	LocalValidatorFactoryBean localValidatorFactoryBean = new LocalValidatorFactoryBean();
 
 	public PetController(Database database) {
 		this.database = database;
@@ -90,17 +100,21 @@ class PetController {
 	}
 
 	@GetMapping("/pets/new")
-	public String initCreationForm(Owner owner, ModelMap model) {
+	public ResponseEntity<String> initCreationForm(Owner owner, ModelMap model) {
+		List<PetType> types = database.findPetTypes();
+		model.put("types", types);
 		Pet pet = new Pet();
+		pet.setBirthDate(LocalDate.now());
+		pet.setType(types.get(0));
 		model.put("pet", pet);
-		return VIEWS_PETS_CREATE_OR_UPDATE_FORM;
+
+		return new ResponseEntity<>(renderView(VIEWS_PETS_CREATE_OR_UPDATE_FORM, model, null), htmlHeaders, HttpStatus.OK);
 	}
 
 	@PostMapping("/pets/new")
-	public String processCreationForm(Owner owner, @Valid Pet pet, BindingResult result, ModelMap model,
+	public ResponseEntity<String> processCreationForm(Owner owner, @Valid Pet pet, BindingResult result, ModelMap model,
 			RedirectAttributes redirectAttributes) {
 		var persistedPets = database.findOwnerAndPetsByOwnerId(owner.getId()).pets();
-		//if (StringUtils.hasText(pet.name) && pet.isNew() && owner.getPet(pet.name, true) != null) {
 		if(persistedPets.stream().anyMatch(it -> it.getName().equals(pet.getName()))) {
 			result.rejectValue("name", "duplicate", "already exists");
 		}
@@ -112,24 +126,33 @@ class PetController {
 
 		if (result.hasErrors()) {
 			model.put("pet", pet);
-			return VIEWS_PETS_CREATE_OR_UPDATE_FORM;
+
+			HttpHeaders headers = new HttpHeaders();
+			headers.add("Content-Type", "text/html");
+			return new ResponseEntity<>(renderView(VIEWS_PETS_CREATE_OR_UPDATE_FORM, model, result), headers, HttpStatus.OK);
 		}
 
 		database.save(pet);
 		redirectAttributes.addFlashAttribute("message", "New Pet has been Added");
-		return "redirect:/owners/{ownerId}";
+		HttpHeaders headers = new HttpHeaders();
+		headers.add("location", "/owners/" + owner.getId());
+		return new ResponseEntity<>("", headers, HttpStatus.MOVED_TEMPORARILY);
 	}
 
 	@GetMapping("/pets/{petId}/edit")
-	public String initUpdateForm(Owner owner, @PathVariable("petId") int petId, ModelMap model,
+	public ResponseEntity<String> initUpdateForm(Owner owner, @PathVariable("petId") int petId, ModelMap model,
 			RedirectAttributes redirectAttributes) {
 		Pet pet = database.findPetById(petId);
 		model.put("pet", pet);
-		return VIEWS_PETS_CREATE_OR_UPDATE_FORM;
+
+		HttpHeaders headers = new HttpHeaders();
+		headers.add("Content-Type", "text/html");
+		return new ResponseEntity<>(renderView(VIEWS_PETS_CREATE_OR_UPDATE_FORM, model, null), headers, HttpStatus.OK);
 	}
 
 	@PostMapping("/pets/{petId}/edit")
-	public String processUpdateForm(@Valid Pet pet, BindingResult result, Owner owner, ModelMap model, RedirectAttributes redirectAttributes) {
+	public ResponseEntity<String> processUpdateForm(@Valid Pet pet, BindingResult result, Owner owner, ModelMap model, RedirectAttributes redirectAttributes) {
+		localValidatorFactoryBean.validate(pet, result);
 
 		String petName = pet.getName();
 
@@ -148,11 +171,16 @@ class PetController {
 
 		if (result.hasErrors()) {
 			model.put("pet", pet);
-			return VIEWS_PETS_CREATE_OR_UPDATE_FORM;
+			HttpHeaders headers = new HttpHeaders();
+			headers.add("Content-Type", "text/html");
+			return new ResponseEntity<>(renderView(VIEWS_PETS_CREATE_OR_UPDATE_FORM, model, result), headers, HttpStatus.OK);
 		}
 
 		database.save(pet);
 		redirectAttributes.addFlashAttribute("message", "Pet details has been edited");
-		return "redirect:/owners/{ownerId}";
+		HttpHeaders headers = new HttpHeaders();
+		headers.add("location", "/owners/" + owner.getId());
+		return new ResponseEntity<>("", headers, HttpStatus.MOVED_TEMPORARILY);
 	}
+
 }

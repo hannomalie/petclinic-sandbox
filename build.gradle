@@ -1,5 +1,6 @@
 plugins {
   id 'java'
+//  id 'gg.jte.gradle' version '3.1.15'
   id 'org.springframework.boot' version '3.3.4'
   id 'io.spring.dependency-management' version '1.1.6'
   id 'org.graalvm.buildtools.native' version '0.10.3'
@@ -25,6 +26,18 @@ repositories {
   mavenCentral()
 }
 
+//jte {
+//  precompile()
+//}
+//
+//jar {
+//  dependsOn precompileJte
+//  from fileTree("jte-classes") {
+//    include "**/*.class"
+//    include "**/*.bin" // Only required if you use binary templates
+//  }
+//}
+
 ext.checkstyleVersion = "10.18.1"
 ext.springJavaformatCheckstyleVersion = "0.0.43"
 ext.webjarsFontawesomeVersion = "4.7.0"
@@ -34,6 +47,8 @@ dependencies {
   implementation 'org.springframework.boot:spring-boot-starter-cache'
   implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
   implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+  implementation 'ognl:ognl:3.2.16'
+  implementation 'gg.jte:jte:3.1.15'
   implementation 'org.springframework.boot:spring-boot-starter-web'
   implementation 'org.springframework.boot:spring-boot-starter-validation'
   implementation 'javax.cache:cache-api'
