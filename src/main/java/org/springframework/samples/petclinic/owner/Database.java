@@ -166,7 +166,6 @@ public class Database {
 				update owners
 				set first_name = :firstName, last_name = :lastName, address = :address, city = :city, telephone = :telephone
 				where id = :id
-				RETURNING *
 				""")
 				.bindBean(owner)
 				.execute();
@@ -216,19 +215,14 @@ public class Database {
 
 	public Pet save(Pet pet) {
 		jdbi.inTransaction(handle -> {
-			var updatedRowsCount = pet.getId() == null ? 0 : handle.createUpdate("""
-				update pets
-				set name = :name, birth_date = :birthDate, type_id = :typeId, owner_id = :ownerId
-				where id = :id
-				RETURNING *
-				""")
+			var updatedRowsCount = pet.getId() == null ? 0 : handle.createUpdate("update pets " +
+																				 "set name = :name, birth_date = :birthDate, type_id = :typeId, owner_id = :ownerId " +
+																				 "where id = :id ")
 				.bindBean(pet)
 				.bind("typeId", pet.getType().getId())
 				.execute();
 			if(updatedRowsCount == 0) {
-				var id = handle.createUpdate("""
-					insert into pets (name, birth_date, type_id, owner_id) values (:name, :birthDate, :typeId, :ownerId)
-					""")
+				var id = handle.createUpdate("insert into pets (name, birth_date, type_id, owner_id) values (:name, :birthDate, :typeId, :ownerId)\n")
 					.bindBean(pet)
 					.bind("typeId", pet.getType().getId())
 					.executeAndReturnGeneratedKeys("id")
@@ -245,7 +239,6 @@ public class Database {
 				update visits
 				set pet_id = :petId, visit_date = :date, description = :description
 				where id = :id
-				RETURNING *
 				""")
 				.bindBean(visit)
 				.bind("petId", petId)
@@ -306,7 +299,6 @@ public class Database {
 				update vets
 				set first_name = :firstName, last_name = :lastName
 				where id = :id
-				RETURNING *
 				""")
 				.bindBean(vet)
 				.execute();
@@ -331,7 +323,6 @@ public class Database {
 				update specialties
 				set name = :name
 				where id = :id
-				RETURNING *
 				""")
 				.bindBean(specialty)
 				.execute();

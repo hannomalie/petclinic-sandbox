@@ -77,17 +77,17 @@ class OwnerController {
 		return ownerId == null ? new ArrayList<>() : (ownerAndPetsByOwnerId == null ? new ArrayList<>() : ownerAndPetsByOwnerId.pets());
 	}
 	@ModelAttribute("visits")
-	public Map<Integer,List<Visit>> findVisits(@PathVariable(name = "ownerId", required = false) Integer ownerId) {
+	public Map<Pet,List<Visit>> findVisits(@PathVariable(name = "ownerId", required = false) Integer ownerId) {
 		OwnerAndPets ownerAndPetsByOwnerId = database.findOwnerAndPetsByOwnerId(ownerId);
 		if (ownerId == null) return new HashMap<>();
 		if (ownerAndPetsByOwnerId == null) return new HashMap<>();
 		return getVisitsForPets(ownerAndPetsByOwnerId);
 	}
 
-	private HashMap<Integer, List<Visit>> getVisitsForPets(OwnerAndPets ownerAndPetsByOwnerId) {
-		var result = new HashMap<Integer, List<Visit>>();
+	private HashMap<Pet, List<Visit>> getVisitsForPets(OwnerAndPets ownerAndPetsByOwnerId) {
+		var result = new HashMap<Pet, List<Visit>>();
 		for (Pet pet : ownerAndPetsByOwnerId.pets()) {
-			result.put(pet.getId(), database.findVisitsForPet(pet.getId()));
+			result.put(pet, database.findVisitsForPet(pet.getId()));
 		}
 		return result;
 	}

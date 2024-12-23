@@ -12,7 +12,7 @@ public class StaticResourcesConfiguration implements WebMvcConfigurer {
 	@Override
 	public void addResourceHandlers(ResourceHandlerRegistry registry) {
 		registry.addResourceHandler("/resources/**")
-			.addResourceLocations("classpath:/static.resources/")
+			.addResourceLocations("classpath:/static/resources/")
 			.setCacheControl(CacheControl.maxAge(Duration.ofDays(365)));
 
 		registry.addResourceHandler("/webjars/**")

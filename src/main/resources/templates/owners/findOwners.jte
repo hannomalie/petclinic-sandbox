@@ -26,7 +26,7 @@
     </div>
     <div class="form-group">
         <div class="col-sm-offset-2 col-sm-10">
-            <button type="submit" class="btn btn-primary">Find Owner</button>
+            <button type="submit" class="btn btn-primary" id="search-owner-form-submit">Find Owner</button>
         </div>
     </div>
 

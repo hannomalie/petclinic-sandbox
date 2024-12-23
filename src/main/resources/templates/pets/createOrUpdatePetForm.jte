@@ -23,13 +23,13 @@
                 </div>
             </div>
             @template.fragments.inputField(fields = fields, label = "Name", name = "name", value = pet.getName(), type = "text")
-            @template.fragments.inputField(fields = fields, label = "Birth Date", name = "birthDate", value = pet.getBirthDate().toString(), "date")
+            @template.fragments.inputField(fields = fields, label = "Birth Date", name = "birthDate", value = pet.getBirthDate().toString(), type = "date")
             !{var typeString = pet.getType() == null ? "" : pet.getType().toString(); }
             @template.fragments.selectField(fields = fields, label = "Type", name = "type", value = typeString, items = types.stream().map(it -> it.getName()).collect(Collectors.toUnmodifiableList()))
         </div>
         <div class="form-group">
             <div class="col-sm-offset-2 col-sm-10">
-                <button class="btn btn-primary" type="submit">
+                <button class="btn btn-primary" id="submit-pet" type="submit">
                     @if(pet.isNew())
                         Add Pet
                     @else

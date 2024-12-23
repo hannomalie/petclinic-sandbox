@@ -146,4 +146,12 @@ public class BaseSpringBootTest {
 		registry.add("spring.sql.init.mode", () -> "always");
 		registry.add("database", () -> "mysql");
 	}
+	protected static void registerInMemoryDataSourceProperties(DynamicPropertyRegistry registry) {
+		registry.add("spring.datasource.url",
+			() -> String.format("jdbc:h2:mem:petclinic"));
+		// does also not work with container.getJdbcUrl()
+		registry.add("spring.datasource.username", () -> "sa");
+		registry.add("spring.datasource.password", () -> "password");
+		registry.add("spring.sql.init.mode", () -> "always");
+	}
 }

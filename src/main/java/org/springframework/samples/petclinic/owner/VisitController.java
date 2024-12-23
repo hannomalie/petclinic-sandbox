@@ -15,6 +15,7 @@
  */
 package org.springframework.samples.petclinic.owner;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.http.HttpHeaders;
@@ -78,7 +79,6 @@ class VisitController {
 		model.put("owner", owner);
 
 		Visit visit = new Visit();
-//		return database.save(visit, petId);
 		return visit;
 	}
 
@@ -86,8 +86,13 @@ class VisitController {
 	// called
 	@GetMapping("/owners/{ownerId}/pets/{petId}/visits/new")
 	public ResponseEntity<String> initNewVisitForm(ModelMap modelMap) {
+		Pet pet = (Pet) modelMap.getAttribute("pet");
+		var visitsForPet = new HashMap<>();
+		if(pet != null) {
+			visitsForPet.put(pet, database.findVisitsForPet(pet.getId()));
+		}
+		modelMap.addAttribute("visitsForPet", visitsForPet);
 		return new ResponseEntity<>(renderView("pets/createOrUpdateVisitForm", modelMap, null), htmlHeaders, HttpStatus.OK);
-//		return "pets/createOrUpdateVisitForm";
 	}
 
 	// Spring MVC calls method loadPetWithVisit(...) before processNewVisitForm is
@@ -97,7 +102,6 @@ class VisitController {
 													  BindingResult result, RedirectAttributes redirectAttributes, ModelMap model) {
 		if (result.hasErrors()) {
 			return new ResponseEntity<>(renderView("pets/createOrUpdateVisitForm", model, result), htmlHeaders, HttpStatus.OK);
-//			return "pets/createOrUpdateVisitForm";
 		}
 
 		database.save(visit, petId);
@@ -105,7 +109,6 @@ class VisitController {
 		HttpHeaders htmlHeaders = new HttpHeaders();
 		htmlHeaders.add("Location", "/owners/" + owner.getId());
 		return new ResponseEntity<>("", htmlHeaders, HttpStatus.MOVED_TEMPORARILY);
-//		return "redirect:/owners/{ownerId}";
 	}
 
 }

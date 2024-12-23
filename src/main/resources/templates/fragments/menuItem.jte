@@ -5,7 +5,7 @@
 @param String text
 
 <li class="nav-item">
-    <a class="${active ? "nav-link active" : "nav-link"}" href="${link}" title="${title}">
+    <a class="${active ? "nav-link active" : "nav-link"}" href="${link}" id="nav-item-${glyph}" title="${title}">
         <span class="fa fa-${glyph}" class="fa fa-home"></span>
         <span>${text}</span>
     </a>

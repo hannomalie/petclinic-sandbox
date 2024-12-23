@@ -1,3 +1,4 @@
+@import org.springframework.samples.petclinic.owner.Pet
 @import org.springframework.samples.petclinic.owner.PetType
 @import org.springframework.samples.petclinic.owner.Visit
 @import org.springframework.samples.petclinic.system.Templating.CustomFields
@@ -7,7 +8,7 @@
 @param org.springframework.samples.petclinic.owner.Visit visit
 @param org.springframework.samples.petclinic.owner.Pet pet
 @param org.springframework.samples.petclinic.owner.Owner owner
-@param java.util.HashMap<Integer, java.util.List<Visit>> visitsForPetId
+@param java.util.HashMap<Pet, java.util.List<Visit>> visitsForPet
 
 @template.fragments.layout(content = @`
 <h2>
@@ -45,7 +46,7 @@
     <div class="form-group">
         <div class="col-sm-offset-2 col-sm-10">
             <input type="hidden" name="petId" value="${pet.getId()}" />
-            <button class="btn btn-primary" type="submit">Add Visit</button>
+            <button class="btn btn-primary" id="add-visit" type="submit">Add Visit</button>
         </div>
     </div>
 </form>
@@ -58,8 +59,8 @@
         <th>Description</th>
     </tr>
 
-    @if(!visit.isNew())
-        @for(Visit visit : visitsForPetId.get(pet.getId()))
+    @if(visitsForPet.get(pet) != null)
+        @for(Visit visit : visitsForPet.get(pet))
             <tr>
                 <td>${java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd").format(visit.getDate())}</td>
                 <td>${visit.getDescription()}</td>

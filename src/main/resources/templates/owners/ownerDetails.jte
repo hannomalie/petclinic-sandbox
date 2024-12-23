@@ -46,8 +46,8 @@
         </tr>
     </table>
 
-    <a href="/owners/${owner.getId()}/edit" class="btn btn-primary">Edit Owner</a>
-    <a href="/owners/${owner.getId()}/pets/new" class="btn btn-primary">Add New Pet</a>
+    <a href="/owners/${owner.getId()}/edit" id="edit-owner" class="btn btn-primary">Edit Owner</a>
+    <a href="/owners/${owner.getId()}/pets/new" id="add-pet-to-owner" class="btn btn-primary">Add New Pet</a>
 
     <br />
     <br />
@@ -76,21 +76,21 @@
                             <th>Description</th>
                         </tr>
                         </thead>
-                        @if(visits.get(pet.getId()) != null)
-                            @for(Visit visit: visits.get(pet.getId()))
+                        @if(visits.get(pet) != null)
+                            @for(Visit visit: visits.get(pet))
                                 <tr>
                                     <td>${DateTimeFormatter.ofPattern("yyyy-MM-dd").format(visit.getDate())}</td>
                                     <td>${visit.getDate().toString()}</td>
                                     <td>${visit == null ? "" : visit.getDescription()}</td>
                                 </tr>
-                                <tr>
-                                    <td><a href="/owners/${owner.getId()}/pets/${pet.getId()}/edit">Edit Pet</a></td>
-                                    <td><a href="/owners/${owner.getId()}/pets/${pet.getId()}/visits/new">Add Visit</a></td>
-                                </tr>
                             @endfor
                         @endif
                     </table>
                 </td>
+            </tr>
+            <tr>
+                <td><a href="/owners/${owner.getId()}/pets/${pet.getId()}/edit" id="edit-pet">Edit Pet</a></td>
+                <td><a href="/owners/${owner.getId()}/pets/${pet.getId()}/visits/new" id="add-visit-to-pet">Add Visit</a></td>
             </tr>
         @endfor
 
@@ -107,4 +107,4 @@
         // Call the function to hide messages
         hideMessages();
     </script>
-`, "owners")
+`, menu = "owners")
