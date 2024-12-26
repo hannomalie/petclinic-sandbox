@@ -1,14 +1,12 @@
 package org.springframework.samples.petclinic;
 
+import com.zaxxer.hikari.HikariDataSource;
+import io.javalin.Javalin;
+import io.javalin.testtools.JavalinTest;
 import org.jetbrains.annotations.NotNull;
+import org.junit.AfterClass;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.condition.DisabledInNativeImage;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.samples.petclinic.owner.*;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.aot.DisabledInAotMode;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 
@@ -19,19 +17,57 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Random;
 
-import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
+import static org.springframework.samples.petclinic.PetClinicApplication.getHikariDataSource;
+import static org.springframework.samples.petclinic.PetClinicApplication.startApplication;
 
-@SpringBootTest(webEnvironment = RANDOM_PORT)//, args = {"--spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration"})
-@DisabledInNativeImage
-@DisabledInAotMode
 public class BaseSpringBootTest {
 
-	@LocalServerPort
 	protected int port;
 
-	@Autowired
 	protected Database database;
+
+	// TODO: Clean constructor mess up
+	public BaseSpringBootTest() {
+		try {
+			HikariDataSource ds = getHikariDataSource("jdbc:h2:mem:testdb", "sa", "password");
+			database = new Database(ds, Database.DatabaseType.H2);
+			var app = startApplication(0, database);
+			port = app.port();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	public BaseSpringBootTest(HikariDataSource ds, Database.DatabaseType databaseType) {
+		try {
+			database = new Database(ds, databaseType);
+			var app = startApplication(0, database);
+			port = app.port();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	public BaseSpringBootTest(MySQLContainer<?> container) {
+		try {
+			HikariDataSource ds = getHikariDataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword());
+			database = new Database(ds, Database.DatabaseType.MySQL);
+			var app = startApplication(0, database);
+			port = app.port();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	public BaseSpringBootTest(PostgreSQLContainer<?> container) {
+		try {
+			HikariDataSource ds = getHikariDataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword());
+			database = new Database(ds, Database.DatabaseType.Postgres);
+			var app = startApplication(0, database);
+			port = app.port();
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
 
 	@BeforeEach
 	void beforeEach() {
@@ -108,50 +144,5 @@ public class BaseSpringBootTest {
 	public OwnerAndPets createOwnerAndPets() {
 		var george = createOwner("George", "Franklin", "110 W. Liberty St.", "Madison", "6085551023");
 		return new OwnerAndPets(george, List.of(createPet(george.getId(), "Milo", database.findPetTypes().get(0))));
-	}
-//	private void initDefaultData() {
-//		petTypes.add(new OwnerRepository.PetType() {{ name = "cat"; }});
-//		petTypes.add(new OwnerRepository.PetType() {{ name = "dog"; }});
-//		petTypes.add(new OwnerRepository.PetType() {{ name = "lizard"; }});
-//		petTypes.add(new OwnerRepository.PetType() {{ name = "snake"; }});
-//		petTypes.add(new OwnerRepository.PetType() {{ name = "bird"; }});
-//		petTypes.add(new OwnerRepository.PetType() {{ name = "hamster"; }});
-//
-//		owners.add(createOwner("George", "Franklin", "110 W. Liberty St.", "Madison", "6085551023"));
-//		owners.add(createOwner("Betty", "Davis", "638 Cardinal Ave.", "Sun Prairie", "6085551749"));
-//		owners.add(createOwner("Eduardo", "Rodriquez", "2693 Commerce St.", "McFarland", "6085558763"));
-//		owners.add(createOwner("Harold", "Davis", "563 Friendly St.", "Windsor", "6085553198"));
-//		owners.add(createOwner("Peter", "McTavish", "2387 S. Fair Way", "Madison", "6085552765"));
-//		owners.add(createOwner("Jean", "Coleman", "105 N. Lake St.", "Monona", "6085552654"));
-//		owners.add(createOwner("Jeff", "Black", "1450 Oak Blvd.", "Monona", "6085555387"));
-//		owners.add(createOwner("Maria", "Escobito", "345 Maple St.", "Madison", "6085557683"));
-//		owners.add(createOwner("David", "Schroeder", "2749 Blackhawk Trail", "Madison", "6085559435"));
-//		owners.add(createOwner("Carlos", "Estaban", "2335 Independence La.", "Waunakee", "6085555487"));
-//	}
-	protected static void registerDataSourceProperties(DynamicPropertyRegistry registry, PostgreSQLContainer<?> container) {
-		registry.add("spring.datasource.url",
-			() -> String.format("jdbc:postgresql://localhost:%d/petclinic", container.getFirstMappedPort()));
-		// does also not work with container.getJdbcUrl()
-		registry.add("spring.datasource.username", () -> container.getUsername());
-		registry.add("spring.datasource.password", () -> container.getPassword());
-		registry.add("spring.sql.init.mode", () -> "always");
-		registry.add("database", () -> "postgres");
-	}
-	protected static void registerDataSourceProperties(DynamicPropertyRegistry registry, MySQLContainer<?> container) {
-		registry.add("spring.datasource.url",
-			() -> String.format("jdbc:mysql://localhost:%d/petclinic", container.getFirstMappedPort()));
-		// does also not work with container.getJdbcUrl()
-		registry.add("spring.datasource.username", () -> container.getUsername());
-		registry.add("spring.datasource.password", () -> container.getPassword());
-		registry.add("spring.sql.init.mode", () -> "always");
-		registry.add("database", () -> "mysql");
-	}
-	protected static void registerInMemoryDataSourceProperties(DynamicPropertyRegistry registry) {
-		registry.add("spring.datasource.url",
-			() -> String.format("jdbc:h2:mem:petclinic"));
-		// does also not work with container.getJdbcUrl()
-		registry.add("spring.datasource.username", () -> "sa");
-		registry.add("spring.datasource.password", () -> "password");
-		registry.add("spring.sql.init.mode", () -> "always");
 	}
 }

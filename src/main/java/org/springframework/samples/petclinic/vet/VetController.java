@@ -20,18 +20,17 @@ import java.util.List;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.catalina.connector.Response;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.RequestEntity;
-import org.springframework.http.ResponseEntity;
+import io.javalin.http.Context;
+import org.eclipse.jetty.server.Response;
 import org.springframework.samples.petclinic.owner.Database;
+import org.springframework.samples.petclinic.system.Page;
+import org.springframework.samples.petclinic.system.PageRequest;
+import org.springframework.samples.petclinic.system.Pageable;
+import org.springframework.samples.petclinic.system.ResponseEntity;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
+import static org.springframework.samples.petclinic.PetClinicApplication.setResponse;
+import static org.springframework.samples.petclinic.PetClinicApplication.getPageParamOrDefault;
 import static org.springframework.samples.petclinic.system.Templating.htmlHeaders;
 import static org.springframework.samples.petclinic.system.Templating.renderView;
 
@@ -42,25 +41,28 @@ import static org.springframework.samples.petclinic.system.Templating.renderView
  * @author Arjen Poutsma
  */
 @Controller
-class VetController {
+public class VetController {
 
 	private final Database database;
+	private final ObjectMapper mapper;
 
-	public VetController(Database vetRepository) {
+	public VetController(Database vetRepository, ObjectMapper mapper) {
 		this.database = vetRepository;
+		this.mapper = mapper;
 	}
 
-	@GetMapping("/vets")
-	public ResponseEntity<String> showVets(@RequestParam(defaultValue = "1") int page, RequestEntity request, ObjectMapper mapper) throws JsonProcessingException {
+	public void showVets(Context ctx) throws JsonProcessingException {
+		var page = getPageParamOrDefault(ctx);
+		var acceptHeader = ctx.header("Accept");
 		Vets vets = new Vets();
 		vets.getVetList().addAll(this.database.findAllVets());
 
-		var acceptHeader = request.getHeaders().get("Accept");
-		if(!acceptHeader.isEmpty() && acceptHeader.get(0).equals("application/json")) {
+		if(acceptHeader != null && acceptHeader.equals("application/json")) {
 			var responseBody = mapper.writeValueAsString(vets);
-			var jsonHeaders = new HttpHeaders();
-			jsonHeaders.add("Content-Type", "application/json");
-			return new ResponseEntity<>(responseBody, jsonHeaders, Response.SC_OK);
+			var jsonHeaders = new HashMap<String, String>();
+			jsonHeaders.put("Content-Type", "application/json");
+
+			setResponse(ctx, new ResponseEntity<>(responseBody, jsonHeaders, Response.SC_OK));
 		} else {
 			var model = new HashMap<String, Object>();
 			model.put("vets", vets.getVetList());
@@ -73,7 +75,8 @@ class VetController {
 			model.put("totalPages", paginated.getTotalPages());
 			model.put("totalItems", paginated.getTotalElements());
 			model.put("listVets", listVets);
-			return new ResponseEntity<>(renderView("vets/vetList", model, null), htmlHeaders, Response.SC_OK);
+
+			setResponse(ctx, new ResponseEntity<>(renderView("vets/vetList", model, null), htmlHeaders, Response.SC_OK));
 		}
 	}
 }

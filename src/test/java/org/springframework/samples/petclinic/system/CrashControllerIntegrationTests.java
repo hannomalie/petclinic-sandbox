@@ -17,15 +17,7 @@
 package org.springframework.samples.petclinic.system;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.samples.petclinic.BaseSpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -39,7 +31,6 @@ import java.util.HashMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
 
 /**
  * Integration Test for {@link CrashController}.
@@ -47,15 +38,15 @@ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironmen
  * @author Alex Lutz
  */
 // NOT Waiting https://github.com/spring-projects/spring-boot/issues/5574
-@SpringBootTest(webEnvironment = RANDOM_PORT,
-		properties = { "server.error.include-message=ALWAYS", "management.endpoints.enabled-by-default=false" })
 @Testcontainers(disabledWithoutDocker = true)
 class CrashControllerIntegrationTests extends BaseSpringBootTest {
 
-	@ServiceConnection
 	@Container
 	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16").withDatabaseName("petclinic");
 
+	public CrashControllerIntegrationTests() {
+		super(container);
+	}
 	@Test
 	void testTriggerExceptionJson() throws Exception {
 		HttpRequest request = HttpRequest.newBuilder()
@@ -85,10 +76,5 @@ class CrashControllerIntegrationTests extends BaseSpringBootTest {
 		assertThat(httpResponse.body().toString()).doesNotContain("Whitelabel Error Page",
 				"This application has no explicit mapping for");
 
-	}
-
-	@DynamicPropertySource
-	static void registerDataSourceProperties(DynamicPropertyRegistry registry) {
-		registerDataSourceProperties(registry, container);
 	}
 }

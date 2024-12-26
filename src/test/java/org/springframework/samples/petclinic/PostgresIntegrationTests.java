@@ -18,10 +18,6 @@ package org.springframework.samples.petclinic;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -33,10 +29,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @Testcontainers(disabledWithoutDocker = true)
 public class PostgresIntegrationTests extends BaseSpringBootTest {
 
-	@ServiceConnection
 	@Container
 	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16");
 
+	public PostgresIntegrationTests() {
+		super(container);
+	}
 	@BeforeAll
 	static void available() {
 		assumeTrue(DockerClientFactory.instance().isDockerAvailable(), "Docker not available");
@@ -52,10 +50,5 @@ public class PostgresIntegrationTests extends BaseSpringBootTest {
 		var george = createGeorge();
 		var httpResponse = get("http://localhost:" + port + "/owners/" + george.getId());
 		assertThat(httpResponse.statusCode()).isEqualTo(200);
-	}
-
-	@DynamicPropertySource
-	static void registerDataSourceProperties(DynamicPropertyRegistry registry) {
-		registerDataSourceProperties(registry, container);
 	}
 }

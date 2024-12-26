@@ -18,11 +18,15 @@ package org.springframework.samples.petclinic.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Set;
 
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.validation.MapBindingResult;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import jakarta.validation.ConstraintViolation;
@@ -34,12 +38,6 @@ import jakarta.validation.Validator;
  */
 class ValidatorTests {
 
-	private Validator createValidator() {
-		LocalValidatorFactoryBean localValidatorFactoryBean = new LocalValidatorFactoryBean();
-		localValidatorFactoryBean.afterPropertiesSet();
-		return localValidatorFactoryBean;
-	}
-
 	@Test
 	void shouldNotValidateWhenFirstNameEmpty() {
 
@@ -48,7 +46,10 @@ class ValidatorTests {
 		person.setFirstName("");
 		person.setLastName("smith");
 
-		Validator validator = createValidator();
+		Validator validator;
+		try (var factory = Validation.buildDefaultValidatorFactory()) {
+			validator = factory.getValidator();
+		}
 		Set<ConstraintViolation<Person>> constraintViolations = validator.validate(person);
 
 		assertThat(constraintViolations).hasSize(1);
@@ -56,5 +57,4 @@ class ValidatorTests {
 		assertThat(violation.getPropertyPath()).hasToString("firstName");
 		assertThat(violation.getMessage()).isEqualTo("must not be blank");
 	}
-
 }

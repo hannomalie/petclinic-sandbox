@@ -15,32 +15,21 @@
  */
 package org.springframework.samples.petclinic.owner;
 
+import io.javalin.http.Context;
+import io.javalin.http.HttpStatus;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.samples.petclinic.BindingResult;
+import org.springframework.samples.petclinic.system.Translations;
+import org.springframework.samples.petclinic.system.Page;
+import org.springframework.samples.petclinic.system.PageRequest;
+import org.springframework.samples.petclinic.system.Pageable;
+import org.springframework.samples.petclinic.system.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.ModelMap;
+
 import java.util.*;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.samples.petclinic.system.Templating;
-import org.springframework.samples.petclinic.system.Translations;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.ui.ModelMap;
-import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.WebDataBinder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.InitBinder;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.servlet.ModelAndView;
-
-import jakarta.validation.Valid;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-
+import static org.springframework.samples.petclinic.PetClinicApplication.*;
 import static org.springframework.samples.petclinic.system.Templating.htmlHeaders;
 import static org.springframework.samples.petclinic.system.Templating.renderView;
 
@@ -51,9 +40,7 @@ import static org.springframework.samples.petclinic.system.Templating.renderView
  * @author Michael Isvy
  */
 @Controller
-class OwnerController {
-
-	private static final String VIEWS_OWNER_CREATE_OR_UPDATE_FORM = "owners/createOrUpdateOwnerForm";
+public class OwnerController {
 
 	private final Database database;
 
@@ -61,111 +48,85 @@ class OwnerController {
 		this.database = database;
 	}
 
-	@InitBinder
-	public void setAllowedFields(WebDataBinder dataBinder) {
-		dataBinder.setDisallowedFields("id");
-	}
-
-	@ModelAttribute("owner")
-	public Owner findOwner(@PathVariable(name = "ownerId", required = false) Integer ownerId) {
-		OwnerAndPets ownerAndPetsByOwnerId = database.findOwnerAndPetsByOwnerId(ownerId);
-		return ownerId == null ? new Owner() : (ownerAndPetsByOwnerId == null ? new Owner() : ownerAndPetsByOwnerId.owner());
-	}
-	@ModelAttribute("pets")
-	public List<Pet> findPets(@PathVariable(name = "ownerId", required = false) Integer ownerId) {
-		OwnerAndPets ownerAndPetsByOwnerId = database.findOwnerAndPetsByOwnerId(ownerId);
-		return ownerId == null ? new ArrayList<>() : (ownerAndPetsByOwnerId == null ? new ArrayList<>() : ownerAndPetsByOwnerId.pets());
-	}
-	@ModelAttribute("visits")
-	public Map<Pet,List<Visit>> findVisits(@PathVariable(name = "ownerId", required = false) Integer ownerId) {
-		OwnerAndPets ownerAndPetsByOwnerId = database.findOwnerAndPetsByOwnerId(ownerId);
-		if (ownerId == null) return new HashMap<>();
-		if (ownerAndPetsByOwnerId == null) return new HashMap<>();
-		return getVisitsForPets(ownerAndPetsByOwnerId);
-	}
-
-	private HashMap<Pet, List<Visit>> getVisitsForPets(OwnerAndPets ownerAndPetsByOwnerId) {
-		var result = new HashMap<Pet, List<Visit>>();
-		for (Pet pet : ownerAndPetsByOwnerId.pets()) {
-			result.put(pet, database.findVisitsForPet(pet.getId()));
-		}
-		return result;
-	}
-
-	@GetMapping("/owners/new")
-	public ResponseEntity<String> initCreationForm(Map<String, Object> model) {
+	public void initCreationForm(@NotNull Context ctx) {
+		var model = new HashMap<String, Object>();
 		Owner owner = new Owner();
 		model.put("owner", owner);
-		return new ResponseEntity<>(renderView(VIEWS_OWNER_CREATE_OR_UPDATE_FORM, model, null), htmlHeaders, HttpStatus.OK);
+		var response = new ResponseEntity<>(renderView("owners/createOrUpdateOwnerForm", model, null), htmlHeaders, HttpStatus.OK.getCode());
+		setResponse(ctx, response);
 	}
 
-	@PostMapping("/owners/new")
-	public ResponseEntity<String> processCreationForm(@Valid Owner owner, BindingResult result,
-									  RedirectAttributes redirectAttributes, ModelMap modelMap) {
+	public void processCreationForm(@NotNull Context ctx) {
+		var owner = getOwnerFromForm(ctx);
+		var result = BindingResult.validate(owner);
+		var modelMap = new HashMap<String, Object>();
+		modelMap.put("owner", owner);
 		if (result.hasErrors()) {
-			redirectAttributes.addFlashAttribute("error", "There was an error in creating the owner.");
+			modelMap.put("error", "There was an error in creating the owner.");
 
-			return new ResponseEntity<>(renderView(VIEWS_OWNER_CREATE_OR_UPDATE_FORM, modelMap, result), htmlHeaders, HttpStatus.OK);
+			setResponse(ctx, new ResponseEntity<>(renderView("owners/createOrUpdateOwnerForm", modelMap, result), htmlHeaders, HttpStatus.OK.getCode()));
+		} else {
+			owner = database.save(owner);
+			modelMap.put("pets", database.findOwnerAndPetsByOwnerId(owner.getId()).pets());
+			modelMap.put("message", "New Owner Created");
+			setResponse(ctx, new ResponseEntity<>(renderView("owners/ownerDetails", modelMap, result), htmlHeaders, org.eclipse.jetty.http.HttpStatus.OK_200));
 		}
-
-		owner = database.save(owner);
-		redirectAttributes.addFlashAttribute("message", "New Owner Created");
-		HttpHeaders htmlHeaders = new HttpHeaders();
-		htmlHeaders.add("Location", "/owners/" + owner.getId());
-		return new ResponseEntity<>(showOwner(owner.getId(), modelMap).getBody(), htmlHeaders, HttpStatus.MOVED_TEMPORARILY);
 	}
 
-	@GetMapping("/owners/find")
-	public ResponseEntity<String> initFindForm(ModelMap modelMap) {
-		return new ResponseEntity<>(renderView("owners/findOwners", modelMap, null), htmlHeaders, HttpStatus.OK);
+	public void initFindForm(Context ctx) {
+		var modelMap = new ModelMap();
+		var response = new ResponseEntity<>(renderView("owners/findOwners", modelMap, null), htmlHeaders, HttpStatus.OK.getCode());
+		setResponse(ctx, response);
 	}
 
-	@GetMapping("/owners")
-	public ResponseEntity<String> processFindForm(@RequestParam(defaultValue = "1") int page,
-												  Owner owner, BindingResult result,
-												Model model, ModelMap modelMap, 	Locale locale) {
+	public void processFindForm(@NotNull Context ctx) {
+		ResponseEntity<String> res;
+		var page = getPageParamOrDefault(ctx);
+		var locale = ctx.req().getLocale();
+		String lastName = ctx.queryParam("lastName");
+		var modelMap = new ModelMap();
 		// allow parameterless GET request for /owners to return all records
-		if (owner.getLastName() == null) {
-			owner.setLastName(""); // empty string signifies broadest possible search
+		if (lastName == null) {
+			lastName = ""; // empty string signifies broadest possible search
 		}
 
 		// find owners by last name
-		Page<OwnerAndPets> ownersResults = findPaginatedForOwnersLastName(page, owner.getLastName());
+		Page<OwnerAndPets> ownersResults = findPaginatedForOwnersLastName(page, lastName);
 		if (ownersResults.isEmpty()) {
+			modelMap.put("lastName", lastName);
 			// no owners found
-			result.rejectValue("lastName", "notFound", Translations.get("notFound", locale));
-			return new ResponseEntity<>(renderView("owners/findOwners", modelMap, result), htmlHeaders, HttpStatus.OK);
-		}
-
-		if (ownersResults.getTotalElements() == 1) {
+			var result = new BindingResult();
+			result.addError("lastName", Translations.get("notFound", locale));
+			res = new ResponseEntity<>(renderView("owners/findOwners", modelMap, result), htmlHeaders, HttpStatus.OK.getCode());
+		} else if (ownersResults.getTotalElements() == 1) {
 			// 1 owner found
 			var foundOwner = ownersResults.iterator().next().owner();
-			HttpHeaders htmlHeaders = new HttpHeaders();
-			htmlHeaders.add("Location", "/owners/" + foundOwner.getId());
-			return new ResponseEntity<>(showOwner(foundOwner.getId(), modelMap).getBody(), htmlHeaders, HttpStatus.MOVED_TEMPORARILY);
-		}
 
-		// multiple owners found
-		return addPaginationModel(page, modelMap, ownersResults);
-	}
+			modelMap.addAttribute("owner", foundOwner);
+			OwnerAndPets ownerAndPets = database.findOwnerAndPetsByOwnerId(foundOwner.getId());
+			List<Pet> pets = ownerAndPets.pets();
+			modelMap.addAttribute("pets", pets);
+			modelMap.addAttribute("visits", database.getVisitsForPets(ownerAndPets));
+			res = new ResponseEntity<>(renderView("owners/ownerDetails", modelMap, null), htmlHeaders, HttpStatus.OK.getCode());
+		} else {
 
-	private ResponseEntity<String> addPaginationModel(int page, ModelMap modelMap, Page<OwnerAndPets> paginated) {
-		List<OwnerAndPets> listOwners = paginated.getContent();
-		modelMap.addAttribute("currentPage", page);
-		modelMap.addAttribute("totalPages", paginated.getTotalPages());
-		modelMap.addAttribute("totalItems", paginated.getTotalElements());
-		modelMap.addAttribute("listOwners", listOwners);
-		var petsForOwnerId = new HashMap<>();
-		var owners = new ArrayList<>();
-		for (OwnerAndPets ownerAndPets : paginated.getContent()) {
-			petsForOwnerId.put(ownerAndPets.owner().getId(), ownerAndPets.pets());
-			owners.add(ownerAndPets.owner());
+			// multiple owners found
+			List<OwnerAndPets> listOwners = ownersResults.getContent();
+			modelMap.addAttribute("currentPage", page);
+			modelMap.addAttribute("totalPages", ownersResults.getTotalPages());
+			modelMap.addAttribute("totalItems", ownersResults.getTotalElements());
+			modelMap.addAttribute("listOwners", listOwners);
+			var petsForOwnerId = new HashMap<>();
+			var owners = new ArrayList<>();
+			for (OwnerAndPets ownerAndPets : ownersResults.getContent()) {
+				petsForOwnerId.put(ownerAndPets.owner().getId(), ownerAndPets.pets());
+				owners.add(ownerAndPets.owner());
+			}
+			modelMap.addAttribute("petsForOwnerId", petsForOwnerId);
+			modelMap.addAttribute("owners", owners);
+			res = new ResponseEntity<>(renderView("owners/ownersList", modelMap, null), htmlHeaders, org.eclipse.jetty.http.HttpStatus.OK_200);
 		}
-		modelMap.addAttribute("petsForOwnerId", petsForOwnerId);
-		modelMap.addAttribute("owners", owners);
-		HttpHeaders htmlHeaders = new HttpHeaders();
-		htmlHeaders.add("Location", "/owners");
-		return new ResponseEntity<>(renderView("owners/ownersList", modelMap, null), htmlHeaders, HttpStatus.MOVED_TEMPORARILY);
+		setResponse(ctx, res);
 	}
 
 	private Page<OwnerAndPets> findPaginatedForOwnersLastName(int page, String lastname) {
@@ -174,44 +135,52 @@ class OwnerController {
 		return database.findByLastName(lastname, pageable);
 	}
 
-	@GetMapping("/owners/{ownerId}/edit")
-	public ResponseEntity<String> initUpdateOwnerForm(@PathVariable("ownerId") int ownerId, ModelMap model) {
+	public void initUpdateOwnerForm(@NotNull Context ctx) {
+		var ownerId = getOwnerIdFromPath(ctx);
 		Owner owner = this.database.findOwnerAndPetsByOwnerId(ownerId).owner();
-		model.addAttribute("owner", owner);
-		return new ResponseEntity<>(renderView(VIEWS_OWNER_CREATE_OR_UPDATE_FORM, model, null), htmlHeaders, HttpStatus.OK);
+		var model = new HashMap<String, Object>();
+		model.put("owner", owner);
+		var response = new ResponseEntity<>(renderView("owners/createOrUpdateOwnerForm", model, null), htmlHeaders, HttpStatus.OK.getCode());
+		setResponse(ctx, response);
 	}
 
-	@PostMapping("/owners/{ownerId}/edit")
-	public ResponseEntity<String> processUpdateOwnerForm(@Valid Owner owner, BindingResult result, @PathVariable("ownerId") int ownerId,
-			RedirectAttributes redirectAttributes, ModelMap model) {
+	public void processUpdateOwnerForm(Context ctx) {
+		var model = new ModelMap();
+		var ownerId = getOwnerIdFromPath(ctx);
+		var owner = getOwnerFromForm(ctx);
+		var result = BindingResult.validate(owner);
+		model.put("owner", owner);
 		if (result.hasErrors()) {
-			redirectAttributes.addFlashAttribute("error", "There was an error in updating the owner.");
-			return new ResponseEntity<>(renderView(VIEWS_OWNER_CREATE_OR_UPDATE_FORM, model, result), htmlHeaders, HttpStatus.OK);
+			model.put("error", "There was an error in updating the owner.");
+			setResponse(ctx, new ResponseEntity<>(renderView("owners/createOrUpdateOwnerForm", model, result), htmlHeaders, HttpStatus.OK.getCode()));
+		} else {
+			owner.setId(ownerId);
+			this.database.save(owner);
+			model.put("message", "Owner Values Updated");
+			OwnerAndPets ownerAndPets = database.findOwnerAndPetsByOwnerId(owner.getId());
+			model.put("pets", ownerAndPets.pets());
+			model.put("visits", database.getVisitsForPets(ownerAndPets));
+
+			setResponse(ctx, new ResponseEntity<>(renderView("owners/ownerDetails", model, result), htmlHeaders, org.eclipse.jetty.http.HttpStatus.OK_200));
 		}
-
-		owner.setId(ownerId);
-		this.database.save(owner);
-		redirectAttributes.addFlashAttribute("message", "Owner Values Updated");
-
-		HttpHeaders htmlHeaders = new HttpHeaders();
-		htmlHeaders.add("Location", "/owners/" + ownerId);
-		// TODO: Return empty body?
-		return new ResponseEntity<>(renderView("owners/ownerDetails", model, result), htmlHeaders, HttpStatus.MOVED_TEMPORARILY);
 	}
 
 	/**
 	 * Custom handler for displaying an owner.
-	 * @param ownerId the ID of the owner to display
+	 *
+	 * @param ctx
 	 * @return a ModelMap with the model attributes for the view
 	 */
-	@GetMapping("/owners/{ownerId}")
-	public ResponseEntity<String> showOwner(@PathVariable("ownerId") int ownerId, ModelMap model) {
+	public void showOwner(Context ctx) {
+		var ownerId = getOwnerIdFromPath(ctx);
+		var model = new ModelMap();
 		OwnerAndPets ownerAndPets = this.database.findOwnerAndPetsByOwnerId(ownerId);
 		Owner owner = ownerAndPets.owner();
 		model.addAttribute("owner", owner);
 		model.addAttribute("pets", ownerAndPets.pets());
-		model.addAttribute("visits", getVisitsForPets(ownerAndPets));
-		return new ResponseEntity<>(renderView("owners/ownerDetails", model, null), htmlHeaders, HttpStatus.OK);
+		model.addAttribute("visits", database.getVisitsForPets(ownerAndPets));
+		var response = new ResponseEntity<>(renderView("owners/ownerDetails", model, null), htmlHeaders, HttpStatus.OK.getCode());
+		setResponse(ctx, response);
 	}
 
 }

@@ -17,11 +17,6 @@
 package org.springframework.samples.petclinic;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.samples.petclinic.owner.Database;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -30,10 +25,12 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 @Testcontainers(disabledWithoutDocker = true)
 class MySqlIntegrationTests extends BaseSpringBootTest {
-	@ServiceConnection
 	@Container
 	static MySQLContainer<?> container = new MySQLContainer<>("mysql:9.0");
 
+	public MySqlIntegrationTests() {
+		super(container);
+	}
 	@Test
 	void testFindAll() throws Exception {
 		database.findAllVets();
@@ -44,11 +41,5 @@ class MySqlIntegrationTests extends BaseSpringBootTest {
 		var george = createGeorge();
 		var httpResponse = get("http://localhost:" + port + "/owners/" + george.getId());
 		assertThat(httpResponse.statusCode()).isEqualTo(200);
-	}
-
-	@DynamicPropertySource
-	static void registerDataSourceProperties(DynamicPropertyRegistry registry) {
-		registerDataSourceProperties(registry, container);
-		registry.add("spring.profiles.active", () -> "mysql");
 	}
 }

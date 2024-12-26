@@ -24,15 +24,12 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.samples.petclinic.BaseSpringBootTest;
 import org.springframework.samples.petclinic.owner.*;
+import org.springframework.samples.petclinic.system.Page;
+import org.springframework.samples.petclinic.system.Pageable;
 import org.springframework.samples.petclinic.vet.Specialty;
 import org.springframework.samples.petclinic.vet.Vet;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -68,23 +65,24 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class ClinicServiceTests extends BaseSpringBootTest {
 
-	@Autowired Database database;
 
 	Pageable pageable = Pageable.unpaged();
 
-	@ServiceConnection
 	@Container
 	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16").withDatabaseName("petclinic");
 
+	ClinicServiceTests() {
+		super(container);
+	}
 	@Test
 	void shouldFindOwnersByLastName() {
 		createOwner("Mark", "Davis", "Foostread", "Manchaster", "0123456789");
 		createOwner("Kurt", "Davis", "Foostread", "Manchaster", "0123456789");
 		Page<OwnerAndPets> owners = this.database.findByLastName("Davis", pageable);
-		assertThat(owners).hasSize(2);
+		assertThat(owners.getContent()).hasSize(2);
 
 		owners = this.database.findByLastName("Daviss", pageable);
-		assertThat(owners).isEmpty();
+		assertThat(owners.getContent()).isEmpty();
 	}
 
 	@Test
@@ -95,7 +93,7 @@ class ClinicServiceTests extends BaseSpringBootTest {
 		assertThat(owner.getLastName()).startsWith("Franklin");
 		assertThat(pets).hasSize(1);
 		assertThat(pets.get(0).getType()).isNotNull();
-		assertThat(pets.get(0).getType().getName()).isEqualTo("bird");
+		assertThat(pets.get(0).getType().getName()).isEqualTo("Bird");
 	}
 
 	@Test
@@ -136,9 +134,9 @@ class ClinicServiceTests extends BaseSpringBootTest {
 		Collection<PetType> petTypes = this.database.findPetTypes();
 
 		PetType petType1 = database.findPetTypes().stream().filter(it -> it.getId() == 1).findFirst().get();
-		assertThat(petType1.getName()).isEqualTo("cat");
+		assertThat(petType1.getName()).isEqualTo("Cat");
 		PetType petType4 = database.findPetTypes().stream().filter(it -> it.getId() == 4).findFirst().get();
-		assertThat(petType4.getName()).isEqualTo("snake");
+		assertThat(petType4.getName()).isEqualTo("Snake");
 	}
 
 	@Test
@@ -234,10 +232,5 @@ class ClinicServiceTests extends BaseSpringBootTest {
 			.element(0)
 			.extracting(it -> it.getDate())
 			.isNotNull();
-	}
-
-	@DynamicPropertySource
-	static void registerDataSourceProperties(DynamicPropertyRegistry registry) {
-		registerDataSourceProperties(registry, container);
 	}
 }

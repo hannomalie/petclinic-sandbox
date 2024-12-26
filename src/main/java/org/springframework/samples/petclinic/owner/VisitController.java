@@ -15,25 +15,18 @@
  */
 package org.springframework.samples.petclinic.owner;
 
+import java.time.LocalDate;
 import java.util.HashMap;
-import java.util.Map;
 
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import io.javalin.http.Context;
+import io.javalin.http.HttpStatus;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.samples.petclinic.BindingResult;
+import org.springframework.samples.petclinic.system.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
-import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.WebDataBinder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.InitBinder;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 
-import jakarta.validation.Valid;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-
+import static org.springframework.samples.petclinic.PetClinicApplication.*;
 import static org.springframework.samples.petclinic.system.Templating.htmlHeaders;
 import static org.springframework.samples.petclinic.system.Templating.renderView;
 
@@ -45,7 +38,7 @@ import static org.springframework.samples.petclinic.system.Templating.renderView
  * @author Dave Syer
  */
 @Controller
-class VisitController {
+public class VisitController {
 
 	private final Database database;
 
@@ -53,62 +46,74 @@ class VisitController {
 		this.database = database;
 	}
 
-	@InitBinder
-	public void setAllowedFields(WebDataBinder dataBinder) {
-		dataBinder.setDisallowedFields("id");
-	}
+//	@InitBinder
+//	public void setAllowedFields(WebDataBinder dataBinder) {
+//		dataBinder.setDisallowedFields("id");
+//	}
 
-	/**
-	 * Called before each and every @RequestMapping annotated method. 2 goals: - Make sure
-	 * we always have fresh data - Since we do not use the session scope, make sure that
-	 * Pet object always has an id (Even though id is not part of the form fields)
-	 *
-	 * @param petId
-	 * @return Pet
-	 */
-	@ModelAttribute("visit")
-	public Visit loadPetWithVisit(@PathVariable("ownerId") int ownerId, @PathVariable("petId") int petId,
-														Map<String, Object> model) {
+	public void initNewVisitForm(Context ctx) {
+		var modelMap = new ModelMap();
+		int ownerId = getOwnerIdFromPath(ctx);
+		int petId = Integer.parseInt(ctx.pathParam("petId"));
+
 		OwnerAndPets ownerAndPets = database.findOwnerAndPetsByOwnerId(ownerId);
 		var owner = ownerAndPets.owner();
 		var pets = ownerAndPets.pets();
 
 		var pet = pets.stream().filter(it -> it.getId().equals(petId)).findFirst().get();
 
-		model.put("pet", pet);
-		model.put("owner", owner);
+		modelMap.put("pet", pet);
+		modelMap.put("owner", owner);
+		var visitsForPet = new HashMap<>();
+		visitsForPet.put(pet, database.findVisitsForPet(pet.getId()));
+		modelMap.addAttribute("visitsForPet", visitsForPet);
+		modelMap.put("visit", new Visit());
 
-		Visit visit = new Visit();
+		setResponse(ctx, new ResponseEntity<>(renderView("pets/createOrUpdateVisitForm", modelMap, null), htmlHeaders, HttpStatus.OK.getCode()));
+	}
+
+	public void processNewVisitForm(Context ctx) {
+		var model = new ModelMap();
+		int ownerId = getOwnerIdFromPath(ctx);
+		var owner = database.findOwnerAndPetsByOwnerId(ownerId).owner();
+		int petId = Integer.parseInt(ctx.pathParam("petId"));
+		var visit = getVisitFromForm(ctx);
+		var result = BindingResult.validate(visit);
+
+		OwnerAndPets ownerAndPets = database.findOwnerAndPetsByOwnerId(owner.getId());
+		var pets = ownerAndPets.pets();
+
+		model.put("pet", pets.stream().filter(it -> it.getId().equals(petId)).findFirst().get());
+		if (result.hasErrors()) {
+			var pet = pets.stream().filter(it -> it.getId().equals(petId)).findFirst().get();
+
+			model.put("visit", visit);
+			var visitsForPet = new HashMap<>();
+			visitsForPet.put(pet, database.findVisitsForPet(pet.getId()));
+			model.addAttribute("visitsForPet", visitsForPet);
+			setResponse(ctx, new ResponseEntity<>(renderView("pets/createOrUpdateVisitForm", model, result), htmlHeaders, HttpStatus.OK.getCode()));
+		} else {
+			database.save(visit, petId);
+			model.put("message", "Your visit has been booked");
+
+			model.put("owner", owner);
+			model.put("pets", pets);
+			model.put("visits", database.getVisitsForPets(ownerAndPets));
+			setResponse(ctx, new ResponseEntity<>(renderView("owners/ownerDetails", model, null), htmlHeaders, HttpStatus.OK.getCode()));
+		}
+	}
+
+	public static @NotNull Visit getVisitFromForm(Context ctx) {
+		var visit = new Visit();
+		var idString = ctx.formParam("id");
+		if (idString != null && !idString.isEmpty()) {
+			visit.setId(Integer.parseInt(idString));
+		}
+		visit.setDescription(ctx.formParam("description"));
+		String dateString = ctx.formParam("date");
+		if (dateString != null && !dateString.isEmpty()) {
+			visit.setDate(LocalDate.parse(dateString));
+		}
 		return visit;
 	}
-
-	// Spring MVC calls method loadPetWithVisit(...) before initNewVisitForm is
-	// called
-	@GetMapping("/owners/{ownerId}/pets/{petId}/visits/new")
-	public ResponseEntity<String> initNewVisitForm(ModelMap modelMap) {
-		Pet pet = (Pet) modelMap.getAttribute("pet");
-		var visitsForPet = new HashMap<>();
-		if(pet != null) {
-			visitsForPet.put(pet, database.findVisitsForPet(pet.getId()));
-		}
-		modelMap.addAttribute("visitsForPet", visitsForPet);
-		return new ResponseEntity<>(renderView("pets/createOrUpdateVisitForm", modelMap, null), htmlHeaders, HttpStatus.OK);
-	}
-
-	// Spring MVC calls method loadPetWithVisit(...) before processNewVisitForm is
-	// called
-	@PostMapping("/owners/{ownerId}/pets/{petId}/visits/new")
-	public ResponseEntity<String> processNewVisitForm(@ModelAttribute Owner owner, @PathVariable int petId, @Valid Visit visit,
-													  BindingResult result, RedirectAttributes redirectAttributes, ModelMap model) {
-		if (result.hasErrors()) {
-			return new ResponseEntity<>(renderView("pets/createOrUpdateVisitForm", model, result), htmlHeaders, HttpStatus.OK);
-		}
-
-		database.save(visit, petId);
-		redirectAttributes.addFlashAttribute("message", "Your visit has been booked");
-		HttpHeaders htmlHeaders = new HttpHeaders();
-		htmlHeaders.add("Location", "/owners/" + owner.getId());
-		return new ResponseEntity<>("", htmlHeaders, HttpStatus.MOVED_TEMPORARILY);
-	}
-
 }

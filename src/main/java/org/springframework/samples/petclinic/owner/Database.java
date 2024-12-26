@@ -15,24 +15,21 @@
  */
 package org.springframework.samples.petclinic.owner;
 
-import java.math.BigInteger;
-import java.sql.Date;
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import org.jdbi.v3.core.Jdbi;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.repository.query.Param;
-import org.springframework.samples.petclinic.vet.Specialty;
-import org.springframework.samples.petclinic.vet.Vet;
-import org.springframework.stereotype.Component;
+import org.springframework.samples.petclinic.PetClinicApplication;
+import org.springframework.samples.petclinic.system.Page;
+import org.springframework.samples.petclinic.system.Pageable;
+import org.springframework.samples.petclinic.vet.*;
 
 import javax.sql.DataSource;
+import java.io.IOException;
+import java.math.BigInteger;
+import java.sql.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.springframework.samples.petclinic.PetClinicApplication.getHikariDataSource;
 
 /**
  * Repository class for <code>Owner</code> domain objects All method names are compliant
@@ -45,16 +42,45 @@ import javax.sql.DataSource;
  * @author Sam Brannen
  * @author Michael Isvy
  */
-@Component
 public class Database {
+	public DatabaseType getType() {
+		return type;
+	}
 
+	public void createTables() {
+		var folderName = switch (getType()) {
+			case H2 -> "h2";
+			case MySQL -> "mysql";
+			case Postgres -> "postgres";
+		};
+		try {
+			executeScript(new String(PetClinicApplication.class.getResourceAsStream("/db/" + folderName + "/schema.sql").readAllBytes()));
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public void createPetTypes() {
+		try {
+			executeScript(new String(PetClinicApplication.class.getResourceAsStream("/db/pet_types_data.sql").readAllBytes()));
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public enum DatabaseType {
+		H2, MySQL, Postgres
+	}
+
+	private final DatabaseType type;
 	private final Jdbi jdbi;
-	public Database(DataSource dataSource) {//, @Value("${spring.datasource.url}") String url, @Value("${spring.datasource.username}") String username, @Value("${spring.datasource.password}") String password) {
-//		this.jdbi = Jdbi.create(url, username, password);
-		this.jdbi = Jdbi.create(dataSource);
 
-//		this.jdbi = Jdbi.create(dataSource.getConnection().getMetaData().getURL(), "test", "test");
-//		this.jdbi = Jdbi.create(dataSource);//dataSource.getConnection().getMetaData().getURL(), username, password);
+	public Database(DataSource dataSource, DatabaseType type) {
+		this.jdbi = Jdbi.create(dataSource);
+		this.type = type;
+	}
+	public Database() {
+		this(getHikariDataSource("jdbc:h2:mem:testdb", "sa", "password"), DatabaseType.H2);
 	}
 
 	/**
@@ -64,6 +90,11 @@ public class Database {
 	public List<PetType> findPetTypes() {
 		return jdbi.inTransaction(handle -> handle.createQuery("SELECT * FROM types ORDER BY name")
 			.mapToBean(PetType.class)
+			.map(it -> {
+				String capitalized = it.getName().substring(0, 1).toUpperCase() + it.getName().substring(1);
+				it.setName(capitalized);
+				return it;
+			})
 			.list());
 	}
 
@@ -75,7 +106,7 @@ public class Database {
 	 * found)
 	 */
 
-	public Page<OwnerAndPets> findByLastName(@Param("lastName") String lastName, Pageable pageable) {
+	public Page<OwnerAndPets> findByLastName(String lastName, Pageable pageable) {
 		List<OwnerAndPets> results = jdbi.inTransaction(handle -> {
 			var owners = handle.createQuery("SELECT DISTINCT * FROM owners WHERE last_name LIKE CONCAT(:lastName, '%')")
 				.bind("lastName", lastName).mapToBean(Owner.class).list();
@@ -87,7 +118,7 @@ public class Database {
 			}).toList();
 		});
 
-		return new PageImpl<>(results, pageable, results.size());
+		return new Page<>(results, pageable);
 	}
 
 	/**
@@ -196,7 +227,7 @@ public class Database {
 	 * Returns all the owners from data store
 	 **/
 	public Page<Owner> findAll(Pageable pageable) {
-		return new PageImpl<>(jdbi.inTransaction(handle -> handle.createQuery(
+		return new Page<>(jdbi.inTransaction(handle -> handle.createQuery(
 				"SELECT owner FROM Owner owner")
 			.mapToBean(Owner.class)
 			.list()));
@@ -269,7 +300,7 @@ public class Database {
 	}
 	public Page<Vet> findAllVetsPageable(Pageable pageable) {
 		List<Vet> allVets = findAllVets();
-		return new PageImpl(allVets, pageable, allVets.size());
+		return new Page<>(allVets, pageable);
 	}
 
 	public Pet findPetById(int petId) {
@@ -356,4 +387,15 @@ public class Database {
 		return jdbi.withHandle(handle -> handle.createQuery("select * from vet_specialties left join specialties on specialty_id = id where vet_id = :vetId").bind("vetId", vet.getId()).mapToBean(Specialty.class).list());
 	}
 
+	public HashMap<Pet, List<Visit>> getVisitsForPets(OwnerAndPets ownerAndPetsByOwnerId) {
+		var result = new HashMap<Pet, List<Visit>>();
+		for (Pet pet : ownerAndPetsByOwnerId.pets()) {
+			result.put(pet, findVisitsForPet(pet.getId()));
+		}
+		return result;
+	}
+
+	public void executeScript(String script) {
+		jdbi.withHandle(handle -> handle.createScript(script).execute());
+	}
 }

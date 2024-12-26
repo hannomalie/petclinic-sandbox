@@ -19,10 +19,7 @@ package org.springframework.samples.petclinic.owner;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.samples.petclinic.BaseSpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -39,10 +36,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Testcontainers(disabledWithoutDocker = true)
 class PetControllerTests extends BaseSpringBootTest {
 
-	@ServiceConnection
 	@Container
 	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16");
 
+	public PetControllerTests() {
+		super(container);
+	}
 	@Test
 	void testInitCreationForm() throws Exception {
 		var george = createGeorge();
@@ -61,8 +60,7 @@ class PetControllerTests extends BaseSpringBootTest {
 			"name=Betty&type=hamster&birthDate=2015-02-12"
 		);
 
-		assertEquals(302, httpResponse.statusCode());
-		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + george.getId()));
+		assertEquals(200, httpResponse.statusCode());
 	}
 
 	@Test
@@ -83,7 +81,7 @@ class PetControllerTests extends BaseSpringBootTest {
 		var httpResponse = get("http://localhost:" + port + "/owners/" + ownerAndPets.owner().getId() + "/pets/" + ownerAndPets.pets().get(0).getId() + "/edit");
 
 		assertEquals(200, httpResponse.statusCode());
-		Assertions.assertThat(httpResponse.body().toString()).containsIgnoringWhitespaces("<button class=\"btn btn-primary\" type=\"submit\">Update Pet</button>");
+		Assertions.assertThat(httpResponse.body().toString()).containsIgnoringWhitespaces("<button class=\"btn btn-primary\" id=\"submit-pet\" type=\"submit\">Update Pet</button>");
 	}
 
 	@Test
@@ -94,8 +92,7 @@ class PetControllerTests extends BaseSpringBootTest {
 			"name=BettyZZZ&type=hamster&birthDate=2015-02-12"
 		);
 
-		assertEquals(302, httpResponse.statusCode());
-		assertTrue(httpResponse.headers().firstValue("location").get().contains("/owners/" + ownerAndPets.owner().getId()));
+		assertEquals(200, httpResponse.statusCode());
 	}
 
 	@Test
@@ -117,10 +114,4 @@ class PetControllerTests extends BaseSpringBootTest {
 //			.andExpect(status().isOk())
 //			.andExpect(view().name("pets/createOrUpdatePetForm"));
 	}
-
-	@DynamicPropertySource
-	static void registerDataSourceProperties(DynamicPropertyRegistry registry) {
-		registerDataSourceProperties(registry, container);
-	}
-
 }

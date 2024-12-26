@@ -20,8 +20,8 @@
             <span class="fa fa-ok form-control-feedback" aria-hidden="true"></span>
         @else
             <span class="fa fa-remove form-control-feedback" aria-hidden="true"></span>
-            @for(FieldError error : fields.getFieldErrors(name))
-                <span class="help-inline">${error.toString()}</span>
+            @for(String error : fields.getFieldErrors(name))
+                <span class="help-inline">${error}</span>
             @endfor
         @endif
     </div>

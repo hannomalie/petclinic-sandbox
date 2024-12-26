@@ -15,29 +15,21 @@
  */
 package org.springframework.samples.petclinic.owner;
 
-import java.time.LocalDate;
-import java.util.Collection;
-import java.util.List;
-
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
+import io.javalin.http.Context;
+import org.eclipse.jetty.http.HttpStatus;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.samples.petclinic.BindingResult;
+import org.springframework.samples.petclinic.system.ResponseEntity;
+import org.springframework.samples.petclinic.system.Translations;
 import org.springframework.ui.ModelMap;
 import org.springframework.util.StringUtils;
-import org.springframework.validation.BindingResult;
-import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
-import org.springframework.web.bind.WebDataBinder;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.InitBinder;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 
-import jakarta.validation.Valid;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 
+import static org.springframework.samples.petclinic.PetClinicApplication.*;
 import static org.springframework.samples.petclinic.system.Templating.htmlHeaders;
 import static org.springframework.samples.petclinic.system.Templating.renderView;
 
@@ -46,27 +38,19 @@ import static org.springframework.samples.petclinic.system.Templating.renderView
  * @author Ken Krebs
  * @author Arjen Poutsma
  */
-@Controller
-@RequestMapping("/owners/{ownerId}")
-class PetController {
-
-	private static final String VIEWS_PETS_CREATE_OR_UPDATE_FORM = "pets/createOrUpdatePetForm";
+public class PetController {
 
 	private final Database database;
-
-	LocalValidatorFactoryBean localValidatorFactoryBean = new LocalValidatorFactoryBean();
 
 	public PetController(Database database) {
 		this.database = database;
 	}
 
-	@ModelAttribute("types")
 	public Collection<PetType> populatePetTypes() {
 		return database.findPetTypes();
 	}
 
-	@ModelAttribute("owner")
-	public Owner findOwner(@PathVariable("ownerId") int ownerId) {
+	public Owner findOwner(int ownerId) {
 
 		Owner owner = database.findOwnerAndPetsByOwnerId(ownerId).owner();
 		if (owner == null) {
@@ -75,8 +59,7 @@ class PetController {
 		return owner;
 	}
 
-	@ModelAttribute("pet")
-	public Pet findPet(@PathVariable("ownerId") int ownerId, @PathVariable(name = "petId", required = false) Integer petId) {
+	public Pet findPet(int ownerId, Integer petId) {
 		if (petId == null) {
 			return new Pet();
 		}
@@ -89,70 +72,91 @@ class PetController {
 		return ownerAndPets.pets().stream().filter(it -> it.getId().equals(petId)).findFirst().orElse(new Pet());
 	}
 
-	@InitBinder("owner")
-	public void initOwnerBinder(WebDataBinder dataBinder) {
-		dataBinder.setDisallowedFields("id");
-	}
+//	@InitBinder("owner")
+//	public void initOwnerBinder(WebDataBinder dataBinder) {
+//		dataBinder.setDisallowedFields("id");
+//	}
 
-	@InitBinder("pet")
-	public void initPetBinder(WebDataBinder dataBinder) {
-		dataBinder.setValidator(new PetValidator());
-	}
+//	@InitBinder("pet")
+//	public void initPetBinder(WebDataBinder dataBinder) {
+//		dataBinder.setValidator(new PetValidator());
+//	}
 
-	@GetMapping("/pets/new")
-	public ResponseEntity<String> initCreationForm(Owner owner, ModelMap model) {
+	public void initCreationForm(Context ctx) {
+		var model = new ModelMap();
+		int ownerId = getOwnerIdFromPath(ctx);
+		var owner = database.findOwnerAndPetsByOwnerId(ownerId).owner();
+
 		List<PetType> types = database.findPetTypes();
 		model.put("types", types);
 		Pet pet = new Pet();
 		pet.setBirthDate(LocalDate.now());
 		pet.setType(types.get(0));
 		model.put("pet", pet);
+		model.put("owner", owner);
 
-		return new ResponseEntity<>(renderView(VIEWS_PETS_CREATE_OR_UPDATE_FORM, model, null), htmlHeaders, HttpStatus.OK);
+		setResponse(ctx, new ResponseEntity<>(renderView("pets/createOrUpdatePetForm", model, null), htmlHeaders, HttpStatus.OK_200));
 	}
 
-	@PostMapping("/pets/new")
-	public ResponseEntity<String> processCreationForm(Owner owner, @Valid Pet pet, BindingResult result, ModelMap model,
-			RedirectAttributes redirectAttributes) {
+	public void processCreationForm(Context ctx) {
+		var locale = ctx.req().getLocale();
+		var model = new ModelMap();
+		int ownerId = getOwnerIdFromPath(ctx);
+		var owner = database.findOwnerAndPetsByOwnerId(ownerId).owner();
+		var pet = getPetFromForm(ctx, database, ownerId);
+		var result = BindingResult.validate(pet);
+		PetValidator.validate(pet, result);
+
 		var persistedPets = database.findOwnerAndPetsByOwnerId(owner.getId()).pets();
 		if(persistedPets.stream().anyMatch(it -> it.getName().equals(pet.getName()))) {
-			result.rejectValue("name", "duplicate", "already exists");
+			result.addError("name", "already exists");
 		}
 
 		LocalDate currentDate = LocalDate.now();
 		if (pet.getBirthDate() != null && pet.getBirthDate().isAfter(currentDate)) {
-			result.rejectValue("birthDate", "typeMismatch.birthDate");
+			result.addError("birthDate", Translations.get("typeMismatch.birthDate", locale));
 		}
 
+		model.put("pet", pet);
+		List<PetType> types = database.findPetTypes();
+		model.put("types", types);
+		model.put("owner", owner);
 		if (result.hasErrors()) {
 			model.put("pet", pet);
-
-			HttpHeaders headers = new HttpHeaders();
-			headers.add("Content-Type", "text/html");
-			return new ResponseEntity<>(renderView(VIEWS_PETS_CREATE_OR_UPDATE_FORM, model, result), headers, HttpStatus.OK);
+			setResponse(ctx, new ResponseEntity<>(renderView("pets/createOrUpdatePetForm", model, result), htmlHeaders, HttpStatus.OK_200));
+		} else {
+			database.save(pet);
+			model.put("message", "New Pet has been Added");
+			List<Pet> pets = database.findOwnerAndPetsByOwnerId(owner.getId()).pets();
+			model.put("pets", pets);
+			model.addAttribute("visits", getVisitsForPets(pets));
+			setResponse(ctx, new ResponseEntity<>(renderView("owners/ownerDetails", model, result), htmlHeaders, HttpStatus.OK_200));
 		}
-
-		database.save(pet);
-		redirectAttributes.addFlashAttribute("message", "New Pet has been Added");
-		HttpHeaders headers = new HttpHeaders();
-		headers.add("location", "/owners/" + owner.getId());
-		return new ResponseEntity<>("", headers, HttpStatus.MOVED_TEMPORARILY);
 	}
 
-	@GetMapping("/pets/{petId}/edit")
-	public ResponseEntity<String> initUpdateForm(Owner owner, @PathVariable("petId") int petId, ModelMap model,
-			RedirectAttributes redirectAttributes) {
+	public void initUpdateForm(Context ctx) {
+		var model = new ModelMap();
+		int ownerId = getOwnerIdFromPath(ctx);
+		var owner = database.findOwnerAndPetsByOwnerId(ownerId).owner();
+		int petId = Integer.parseInt(ctx.pathParam("petId"));
+
 		Pet pet = database.findPetById(petId);
 		model.put("pet", pet);
+		List<PetType> types = database.findPetTypes();
+		model.put("types", types);
 
-		HttpHeaders headers = new HttpHeaders();
-		headers.add("Content-Type", "text/html");
-		return new ResponseEntity<>(renderView(VIEWS_PETS_CREATE_OR_UPDATE_FORM, model, null), headers, HttpStatus.OK);
+		var headers = new HashMap<String, String>();
+		headers.put("Content-Type", "text/html");
+		setResponse(ctx, new ResponseEntity<>(renderView("pets/createOrUpdatePetForm", model, null), headers, HttpStatus.OK_200));
 	}
 
-	@PostMapping("/pets/{petId}/edit")
-	public ResponseEntity<String> processUpdateForm(@Valid Pet pet, BindingResult result, Owner owner, ModelMap model, RedirectAttributes redirectAttributes) {
-		localValidatorFactoryBean.validate(pet, result);
+	public void processUpdateForm(@NotNull Context ctx) {
+		var locale = ctx.req().getLocale();
+		var model = new ModelMap();
+		int ownerId = getOwnerIdFromPath(ctx);
+		var pet = getPetFromForm(ctx, database, ownerId);
+		var owner = database.findOwnerAndPetsByOwnerId(ownerId).owner();
+		var result = BindingResult.validate(pet);
 
 		String petName = pet.getName();
 
@@ -160,27 +164,53 @@ class PetController {
 		if (StringUtils.hasText(petName)) {
 			var persistedPets = database.findOwnerAndPetsByOwnerId(owner.getId()).pets();
 			if(persistedPets.stream().anyMatch(it -> it.getName().equals(pet.getName()))) {
-				result.rejectValue("name", "duplicate", "already exists");
+				result.addError("name", Translations.get("duplicate", locale));
 			}
 		}
 
 		LocalDate currentDate = LocalDate.now();
 		if (pet.getBirthDate() != null && pet.getBirthDate().isAfter(currentDate)) {
-			result.rejectValue("birthDate", "typeMismatch.birthDate");
+			result.addError("birthDate", Translations.get("typeMismatch.birthDate", locale));
 		}
 
 		if (result.hasErrors()) {
 			model.put("pet", pet);
-			HttpHeaders headers = new HttpHeaders();
-			headers.add("Content-Type", "text/html");
-			return new ResponseEntity<>(renderView(VIEWS_PETS_CREATE_OR_UPDATE_FORM, model, result), headers, HttpStatus.OK);
-		}
+			List<PetType> types = database.findPetTypes();
+			model.put("types", types);
+			var headers = new HashMap<String, String>();
+			headers.put("Content-Type", "text/html");
 
-		database.save(pet);
-		redirectAttributes.addFlashAttribute("message", "Pet details has been edited");
-		HttpHeaders headers = new HttpHeaders();
-		headers.add("location", "/owners/" + owner.getId());
-		return new ResponseEntity<>("", headers, HttpStatus.MOVED_TEMPORARILY);
+			setResponse(ctx, new ResponseEntity<>(renderView("pets/createOrUpdatePetForm", model, result), headers, HttpStatus.OK_200));
+		} else {
+			database.save(pet);
+			model.put("message", "Pet details has been edited");
+			model.put("owner", owner);
+			List<Pet> pets = database.findOwnerAndPetsByOwnerId(owner.getId()).pets();
+			model.put("pets", pets);
+			model.put("visits", getVisitsForPets(pets));
+
+			setResponse(ctx, new ResponseEntity<>(renderView("owners/ownerDetails", model, result), htmlHeaders, HttpStatus.OK_200));
+		}
+	}
+
+	private HashMap<Pet, List<Visit>> getVisitsForPets(List<Pet> pets) {
+		var result = new HashMap<Pet, List<Visit>>();
+		for (Pet pet : pets) {
+			result.put(pet, database.findVisitsForPet(pet.getId()));
+		}
+		return result;
+	}
+	private static @NotNull Pet getPetFromForm(Context ctx, Database database, Integer ownerId) {
+		var pet = new Pet();
+		var idString = ctx.formParam("id");
+		if (idString != null && !idString.isEmpty()) {
+			pet.setId(Integer.parseInt(idString));
+		}
+		pet.setName(ctx.formParam("name"));
+		pet.setType(database.findPetTypes().stream().filter(it -> it.getName().equalsIgnoreCase(ctx.formParam("type"))).findFirst().orElse(null));
+		pet.setBirthDate(LocalDate.parse(ctx.formParam("birthDate")));
+		pet.setOwnerId(ownerId);
+		return pet;
 	}
 
 }

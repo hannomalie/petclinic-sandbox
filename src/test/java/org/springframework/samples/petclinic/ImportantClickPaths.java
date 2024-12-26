@@ -1,15 +1,13 @@
 package org.springframework.samples.petclinic;
 
-import com.microsoft.playwright.Browser;
-import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.*;
 import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.*;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import java.nio.file.Paths;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 public class ImportantClickPaths extends BaseSpringBootTest {
 
@@ -22,7 +20,11 @@ public class ImportantClickPaths extends BaseSpringBootTest {
 
 	@BeforeEach
 	void createContextAndPage() {
-		context = browser.newContext(new Browser.NewContextOptions().setLocale("de"));
+		context = browser.newContext(new Browser.NewContextOptions()
+			.setRecordVideoDir(Paths.get("build/test-results/videos/"))
+			.setRecordVideoSize(640, 480)
+			.setLocale("de"));
+		context.setDefaultTimeout(10000);
 		page = context.newPage();
 	}
 
@@ -109,16 +111,11 @@ public class ImportantClickPaths extends BaseSpringBootTest {
 	@BeforeAll
 	static void launchBrowser() {
 		playwright = Playwright.create();
-		browser = playwright.chromium().launch();
+		browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
 	}
 
 	@AfterAll
 	static void closeBrowser() {
 		playwright.close();
-	}
-
-	@DynamicPropertySource
-	static void registerProperties(DynamicPropertyRegistry registry) {
-		registerInMemoryDataSourceProperties(registry);
 	}
 }

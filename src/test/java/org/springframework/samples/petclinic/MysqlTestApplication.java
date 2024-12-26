@@ -16,10 +16,10 @@
 
 package org.springframework.samples.petclinic;
 
-import org.springframework.boot.SpringApplication;
+import org.springframework.samples.petclinic.owner.Database;
 import org.testcontainers.containers.MySQLContainer;
-import org.testcontainers.containers.PostgreSQLContainer;
 
+import java.io.IOException;
 import java.time.Duration;
 
 /**
@@ -28,29 +28,14 @@ import java.time.Duration;
  * @author Dave Syer
  *
  */
-//@Configuration
 public class MysqlTestApplication {
 
-//	@ServiceConnection
-//	@Profile("mysql")
-//	@Bean
-//	static MySQLContainer<?> container() {
-//		return new MySQLContainer<>("mysql:9.0");
-//	}
-
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 		try(MySQLContainer<?> container = new MySQLContainer<>("mysql:9.0")
-//		try(PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16")
 			.withMinimumRunningDuration(Duration.ofSeconds(5L))
 		) {
 			container.start();
-
-			SpringApplication.run(PetClinicApplication.class,
-//				"--spring.profiles.active=postgres",
-				"--spring.profiles.active=mysql",
-				"--spring.datasource.url=" + container.getJdbcUrl(),
-				"--spring.datasource.username=" + container.getUsername(),
-				"--spring.datasource.password=" + container.getPassword());
+			PetClinicApplication.startApplication(8080, container.getJdbcUrl(), container.getUsername(), container.getPassword(), Database.DatabaseType.MySQL);
 		}
 	}
 

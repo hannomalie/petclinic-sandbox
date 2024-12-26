@@ -2,13 +2,10 @@ package org.springframework.samples.petclinic.system;
 
 import gg.jte.CodeResolver;
 import gg.jte.ContentType;
-import gg.jte.TemplateEngine;
 import gg.jte.TemplateOutput;
 import gg.jte.output.StringOutput;
 import gg.jte.resolve.ResourceCodeResolver;
-import org.springframework.http.HttpHeaders;
-import org.springframework.validation.BindingResult;
-import org.springframework.validation.FieldError;
+import org.springframework.samples.petclinic.BindingResult;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -31,10 +28,10 @@ public class Templating {
 		return output.toString();
 	}
 
-	public static HttpHeaders htmlHeaders = new HttpHeaders();
+	public static Map<String, String> htmlHeaders = new HashMap<>();
 
 	static {
-		htmlHeaders.add("Content-Type", "text/html");
+		htmlHeaders.put("Content-Type", "text/html");
 	}
 	public static class CustomFields {
 		private final BindingResult result;
@@ -53,12 +50,12 @@ public class Templating {
 
 			return result.hasFieldErrors(fieldName);
 		}
-		public List<FieldError> getFieldErrors(String fieldName) {
+		public List<String> getFieldErrors(String fieldName) {
 			if(result == null) return new ArrayList<>();
 
 			return result.getFieldErrors(fieldName);
 		}
-		public List<FieldError> getFieldErrors() {
+		public List<String> getFieldErrors() {
 			if(result == null) return new ArrayList<>();
 
 			return result.getFieldErrors();

@@ -19,6 +19,10 @@ import org.springframework.util.StringUtils;
 import org.springframework.validation.Errors;
 import org.springframework.validation.Validator;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+
 /**
  * <code>Validator</code> for <code>Pet</code> forms.
  * <p>
@@ -29,36 +33,25 @@ import org.springframework.validation.Validator;
  * @author Ken Krebs
  * @author Juergen Hoeller
  */
-public class PetValidator implements Validator {
+public class PetValidator {
 
 	private static final String REQUIRED = "required";
 
-	@Override
-	public void validate(Object obj, Errors errors) {
-		Pet pet = (Pet) obj;
+	public static void validate(Pet pet, HashMap<String, List<String>> errors) {
 		String name = pet.getName();
 		// name validation
 		if (!StringUtils.hasText(name)) {
-			errors.rejectValue("name", REQUIRED, REQUIRED);
+			errors.put("name", List.of(REQUIRED));
 		}
 
 		// type validation
 		if (pet.isNew() && pet.getType() == null) {
-			errors.rejectValue("type", REQUIRED, REQUIRED);
+			errors.put("type", List.of(REQUIRED));
 		}
 
 		// birth date validation
 		if (pet.getBirthDate() == null) {
-			errors.rejectValue("birthDate", REQUIRED, REQUIRED);
+			errors.put("birthDate", List.of(REQUIRED));
 		}
 	}
-
-	/**
-	 * This Validator validates *just* Pet instances
-	 */
-	@Override
-	public boolean supports(Class<?> clazz) {
-		return Pet.class.isAssignableFrom(clazz);
-	}
-
 }

@@ -17,11 +17,6 @@
 package org.springframework.samples.petclinic;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -31,10 +26,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers(disabledWithoutDocker = true)
 public class PetClinicIntegrationTests extends BaseSpringBootTest {
 
-	@ServiceConnection
 	@Container
 	static PostgreSQLContainer<?> container = new PostgreSQLContainer<>("pgvector/pgvector:pg16").withDatabaseName("petclinic");
 
+	public PetClinicIntegrationTests() {
+		super(container);
+	}
 	@Test
 	void testFindAll() throws Exception {
 		database.findAllVets();
@@ -46,14 +43,4 @@ public class PetClinicIntegrationTests extends BaseSpringBootTest {
 		var httpResponse = get("http://localhost:" + port + "/owners/" + george.getId());
 		assertThat(httpResponse.statusCode()).isEqualTo(200);
 	}
-
-	@DynamicPropertySource
-	static void registerDataSourceProperties(DynamicPropertyRegistry registry) {
-		registerDataSourceProperties(registry, container);
-	}
-
-	public static void main(String[] args) {
-		SpringApplication.run(PetClinicApplication.class, args);
-	}
-
 }
