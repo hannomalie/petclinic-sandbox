@@ -8,7 +8,7 @@
 @param org.springframework.samples.petclinic.owner.Visit visit
 @param org.springframework.samples.petclinic.owner.Pet pet
 @param org.springframework.samples.petclinic.owner.Owner owner
-@param java.util.HashMap<Pet, java.util.List<Visit>> visitsForPet
+@param java.util.Map<Pet, java.util.List<Visit>> visitsForPet
 
 @template.fragments.layout(content = @`
 <h2>

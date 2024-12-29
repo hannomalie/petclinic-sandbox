@@ -5,7 +5,7 @@
 @param String error
 @param org.springframework.samples.petclinic.owner.Owner owner
 @param java.util.List<Pet> pets
-@param java.util.HashMap<Pet, java.util.List<Visit>> visits
+@param java.util.Map<Pet, java.util.List<Visit>> visits
 
 !{var hasMessage = message != null && !message.isEmpty();}
 !{var hasError = error != null && !error.isEmpty();}

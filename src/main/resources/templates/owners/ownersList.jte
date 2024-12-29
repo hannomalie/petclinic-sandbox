@@ -4,7 +4,7 @@
 @param java.util.List<Owner> owners
 @param int totalPages
 @param int currentPage
-@param java.util.HashMap<Integer, java.util.List<Pet>> petsForOwnerId
+@param java.util.Map<Integer, java.util.List<Pet>> petsForOwnerId
 @template.fragments.layout(content = @`
     <h2>Owners</h2>l
 
